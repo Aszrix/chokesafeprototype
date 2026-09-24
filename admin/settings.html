@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Admin | Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+    <style>
+        body { background: #f1f5f9; font-family: system-ui, -apple-system, sans-serif; }
+        .admin-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.25rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            border: 1px solid #e9edf2;
+        }
+        .toggle {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 26px;
+            flex-shrink: 0;
+        }
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background: #cbd5e1;
+            border-radius: 9999px;
+            transition: background 0.25s ease;
+        }
+        .toggle .slider::before {
+            content: "";
+            position: absolute;
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.25s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .toggle input:checked + .slider {
+            background: #e11d48;
+        }
+        .toggle input:checked + .slider::before {
+            transform: translateX(18px);
+        }
+        .toggle input:focus-visible + .slider {
+            outline: 2px solid #e11d48;
+            outline-offset: 2px;
+        }
+
+        .nav-links { display: flex; gap: 1rem; align-items: center; }
+        .hamburger { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #1e293b; padding: 0.25rem 0.5rem; }
+        .nav-link-custom { position: relative; transition: all 0.2s ease; }
+        .nav-link-custom::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 2px; background: #e11d48; transition: width 0.3s ease; }
+        .nav-link-custom:hover::after { width: 100%; }
+        .nav-link-custom.active::after { width: 100%; }
+
+        @media (max-width: 640px) {
+            .nav-links { display: none; flex-direction: column; gap: 0.5rem; padding: 0.75rem 0; width: 100%; align-items: flex-start; }
+            .nav-links.open { display: flex; }
+            .hamburger { display: block; }
+            .nav-container { flex-wrap: wrap; }
+            .nav-links button { font-size: 0.9rem !important; padding: 0.4rem 0 !important; }
+        }
+
+        .api-key-wrapper {
+            position: relative;
+        }
+        .api-key-wrapper input {
+            padding-right: 3.5rem;
+        }
+        .api-key-toggle {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            font-size: 1.1rem;
+            cursor: pointer;
+            color: #94a3b8;
+            padding: 0.25rem;
+        }
+        .api-key-toggle:hover { color: #475569; }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .setting-row:last-child {
+            border-bottom: none;
+        }
+        .setting-label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.1rem;
+        }
+        .setting-label .title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .setting-label .desc {
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid #e2e8f0;
+            padding: 0.4rem 1.2rem;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #475569;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-ghost:hover {
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+        }
+        .btn-danger {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+        .btn-danger:hover {
+            background: #fecaca;
+        }
+
+        @media (max-width: 480px) {
+            .admin-card { padding: 1rem; }
+            .setting-row { padding: 0.5rem 0; }
+            .setting-label .title { font-size: 0.8rem; }
+            .toggle { width: 40px; height: 24px; }
+            .toggle .slider::before { height: 18px; width: 18px; }
+            .toggle input:checked + .slider::before { transform: translateX(16px); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-stone-50 via-white to-stone-100 min-h-screen antialiased">
+
+    <nav class="bg-white/90 backdrop-blur-md border-b border-rose-100/60 p-3 md:p-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-6xl mx-auto flex justify-between items-center nav-container">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🛡️</span>
+                <h1 class="font-black text-xl md:text-2xl text-rose-700 tracking-tight">ChokeSafe · Admin</h1>
+            </div>
+            <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+            <div class="nav-links" id="nav-links">
+                <button onclick="window.location.href='dashboard.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Dashboard</button>
+                <button onclick="window.location.href='feedback.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Feedback</button>
+                <button onclick="window.location.href='logs.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Scan Logs</button>
+                <button onclick="window.location.href='fooddb.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Food DB</button>
+                <button onclick="window.location.href='settings.html'" class="nav-link-custom text-rose-600 font-medium text-xs md:text-sm active">Settings</button>
+                <button onclick="logout()" class="bg-stone-100/70 text-stone-600 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[10px] md:text-xs font-bold hover:bg-rose-100 hover:text-rose-700 transition-colors border border-stone-200/40">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-3xl mx-auto p-3 md:p-4 space-y-4">
+
+        <div class="admin-card">
+            <h2 class="text-base font-bold text-stone-800 mb-3 flex items-center gap-2">
+                <span>⚙️</span> Feature Toggles
+            </h2>
+            <div class="space-y-0.5">
+                <!-- Stress Test -->
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span class="title">🧪 Stress Test Mode</span>
+                        <span class="desc">Show stress test badge on user pages</span>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggle-stress" onchange="toggleFeature('stress')">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <!-- Feedback Collection -->
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span class="title">📝 Feedback Collection</span>
+                        <span class="desc">Allow users to submit feedback via the Report page</span>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggle-feedback" onchange="toggleFeature('feedback')">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <!-- Chatbot Access -->
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span class="title">💬 Chatbot Access</span>
+                        <span class="desc">Enable the Chat support feature for users</span>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggle-chatbot" onchange="toggleFeature('chatbot')">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <!-- Scanner Enabled -->
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span class="title">🔍 Scanner Enabled</span>
+                        <span class="desc">Allow users to access the Scan page</span>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggle-scanner" onchange="toggleFeature('scanner')">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <!-- Show News -->
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span class="title">📰 Show News in Scan Results</span>
+                        <span class="desc">Display related news articles after a scan</span>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggle-news" onchange="toggleFeature('news')">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <!-- Guest Access -->
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span class="title">👤 Guest Access</span>
+                        <span class="desc">Allow users to bypass sign‑in and browse as guest</span>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggle-guest" onchange="toggleFeature('guest')">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="admin-card">
+            <h2 class="text-base font-bold text-stone-800 mb-3 flex items-center gap-2">
+                <span>🔑</span> API Configuration
+            </h2>
+            <div class="space-y-2">
+                <label class="block text-xs font-medium text-stone-600">Gemini API Key</label>
+                <div class="api-key-wrapper">
+                    <input type="password" id="settings-api-key" class="form-input w-full pr-12" placeholder="Enter your Gemini API key">
+                    <button type="button" class="api-key-toggle" onclick="toggleApiKeyVisibility()" title="Toggle visibility">👁️</button>
+                </div>
+                <button onclick="saveApiKey()" class="btn-primary mt-1 text-xs py-1.5 px-4">Save Key</button>
+                <p class="text-xs text-stone-400 mt-1">This key is used for the AI food scanner.</p>
+            </div>
+        </div>
+
+        <div class="admin-card border-red-200 border-2">
+            <h2 class="text-base font-bold text-red-700 mb-2 flex items-center gap-2">
+                <span>⚠️</span> Reset Settings
+            </h2>
+            <p class="text-xs text-stone-500 mb-3">Restore all settings to their default values. This will not affect your API key.</p>
+            <button onclick="resetSettings()" class="btn-danger px-5 py-2 rounded-full text-xs font-bold hover:bg-red-200 transition-colors">
+                Reset All Toggles
+            </button>
+        </div>
+
+        <p class="text-center text-[10px] text-stone-400 mt-2">All settings are stored locally in your browser.</p>
+    </main>
+
+    <script src="admin.js"></script>
+    <script>
+        if (!checkAdminAuth()) { /* redirect already done */ }
+
+        function toggleNav() { document.getElementById('nav-links').classList.toggle('open'); }
+
+        function loadSettings() {
+            const apiKey = localStorage.getItem('gemini_api_key') || '';
+            document.getElementById('settings-api-key').value = apiKey;
+
+            const defaults = {
+                stress: false,
+                feedback: true,
+                chatbot: true,
+                scanner: true,
+                news: true,
+                guest: true
+            };
+
+            for (const [key, def] of Object.entries(defaults)) {
+                const stored = localStorage.getItem(`feature_${key}`);
+                const checked = stored !== null ? stored === 'true' : def;
+                const el = document.getElementById(`toggle-${key}`);
+                if (el) el.checked = checked;
+            }
+        }
+
+        function toggleFeature(feature) {
+            const el = document.getElementById(`toggle-${feature}`);
+            if (!el) return;
+            const val = el.checked;
+            localStorage.setItem(`feature_${feature}`, String(val));
+
+            // Backward compatibility for old keys
+            if (feature === 'stress') localStorage.setItem('stress_test_enabled', String(val));
+            if (feature === 'feedback') localStorage.setItem('feedback_enabled', String(val));
+            console.log(`Feature "${feature}" set to ${val}`);
+        }
+
+        function saveApiKey() {
+            const key = document.getElementById('settings-api-key').value.trim();
+            localStorage.setItem('gemini_api_key', key);
+            alert('API key saved.');
+        }
+
+        let apiKeyVisible = false;
+        function toggleApiKeyVisibility() {
+            const input = document.getElementById('settings-api-key');
+            apiKeyVisible = !apiKeyVisible;
+            input.type = apiKeyVisible ? 'text' : 'password';
+        }
+
+        function resetSettings() {
+            if (!confirm('Reset all feature toggles to their default values?')) return;
+            const defaults = {
+                stress: false,
+                feedback: true,
+                chatbot: true,
+                scanner: true,
+                news: true,
+                guest: true
+            };
+            for (const [key, def] of Object.entries(defaults)) {
+                localStorage.setItem(`feature_${key}`, String(def));
+                if (key === 'stress') localStorage.setItem('stress_test_enabled', String(def));
+                if (key === 'feedback') localStorage.setItem('feedback_enabled', String(def));
+            }
+            loadSettings();
+            alert('All toggles have been reset to defaults.');
+        }
+
+        document.addEventListener('DOMContentLoaded', loadSettings);
+        window.addEventListener('storage', loadSettings);
+
+        window.toggleNav = toggleNav;
+        window.toggleFeature = toggleFeature;
+        window.saveApiKey = saveApiKey;
+        window.toggleApiKeyVisibility = toggleApiKeyVisibility;
+        window.resetSettings = resetSettings;
+    </script>
+</body>
+</html>

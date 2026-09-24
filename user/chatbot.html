@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>ChokeSafe | Chat Support</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+    <style>
+        .chat-message {
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .chat-bubble-user {
+            background: linear-gradient(135deg, #e11d48, #be123c);
+            color: white;
+            border-radius: 18px 18px 4px 18px;
+        }
+        .chat-bubble-bot {
+            background: #f1f5f9;
+            color: #1e293b;
+            border-radius: 18px 18px 18px 4px;
+        }
+        .nav-link-custom {
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        .nav-link-custom::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #e11d48;
+            transition: width 0.3s ease;
+        }
+        .nav-link-custom:hover::after {
+            width: 100%;
+        }
+        .nav-link-custom.active::after {
+            width: 100%;
+        }
+        .nav-links { display: flex; gap: 1rem; align-items: center; }
+        .hamburger { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #1e293b; padding: 0.25rem 0.5rem; }
+        @media (max-width: 640px) {
+            .nav-links { display: none; flex-direction: column; gap: 0.5rem; padding: 0.75rem 0; width: 100%; align-items: flex-start; }
+            .nav-links.open { display: flex; }
+            .hamburger { display: block; }
+            .nav-container { flex-wrap: wrap; }
+            .nav-links button { font-size: 0.9rem !important; padding: 0.4rem 0 !important; }
+        }
+        .btn-primary-rose {
+            background: linear-gradient(135deg, #e11d48, #be123c);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .btn-primary-rose:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(225, 29, 72, 0.3);
+        }
+        .guest-badge {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            color: #92400e;
+            font-size: 10px;
+            padding: 2px 12px;
+            border-radius: 9999px;
+            font-weight: 600;
+        }
+        .welcome-badge {
+            background: linear-gradient(135deg, #fce7f3, #fbcfe8);
+        }
+
+        /* ─── Fixed header + scrollable messages ─────────────────────────── */
+        .chat-panel {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 220px);
+            min-height: 400px;
+            max-height: 700px;
+        }
+        .chat-messages-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+        .chat-footer {
+            flex-shrink: 0;
+        }
+        .chat-header {
+            flex-shrink: 0;
+        }
+
+        @media (max-width: 640px) {
+            .chat-panel {
+                height: calc(100vh - 190px);
+                max-height: 600px;
+            }
+        }
+        @media (max-height: 700px) {
+            .chat-panel {
+                height: calc(100vh - 180px);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-stone-50 via-white to-stone-100 min-h-screen text-stone-800 font-sans antialiased">
+
+    <!-- ─── GUEST REDIRECT ────────────────────────────────────────────── -->
+    <script>
+        (function() {
+            const isGuest = sessionStorage.getItem('session_is_guest') === 'true' || 
+                            sessionStorage.getItem('current_session_phone') === 'GUEST_USER';
+            if (isGuest) {
+                alert('Please sign in or register to use the chat support.');
+                window.location.href = 'index.html';
+            }
+        })();
+
+        (function() {
+            const chatbotEnabled = localStorage.getItem('feature_chatbot') !== 'false';
+            if (!chatbotEnabled) {
+                document.body.innerHTML = `
+                    <div class="max-w-2xl mx-auto p-4 text-center mt-10">
+                        <h2 class="text-2xl font-bold text-stone-700">💬 Chat Disabled</h2>
+                        <p class="text-stone-500 mt-2">The chat support feature is currently disabled by the administrator.</p>
+                        <a href="homepage.html" class="inline-block mt-4 text-rose-600 font-bold">← Back to Home</a>
+                    </div>
+                `;
+                return;
+            }
+        })();
+    </script>
+
+    <!-- ─── NAVIGATION ──────────────────────────────────────────────────── -->
+    <nav class="bg-white/90 backdrop-blur-md border-b border-rose-100/60 p-3 md:p-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-2xl mx-auto flex justify-between items-center nav-container">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🛡️</span>
+                <h1 class="font-black text-xl md:text-2xl text-rose-700 tracking-tight cursor-pointer" onclick="window.location.href='homepage.html'">ChokeSafe</h1>
+            </div>
+            <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+            <div class="nav-links" id="nav-links">
+                <button onclick="window.location.href='homepage.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Home</button>
+                <button onclick="window.location.href='scan.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Scan</button>
+                <button onclick="window.location.href='chatbot.html'" class="nav-link-custom text-rose-600 font-medium text-xs md:text-sm active">Chat</button>
+                <button onclick="window.location.href='report.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Report</button>
+                <button id="nav-history-btn" onclick="window.location.href='history.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm hidden">History</button>
+                <button onclick="window.location.href='guide.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Guide</button>
+                <button id="nav-account-btn" onclick="window.location.href='account.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm hidden">Account</button>
+                <button onclick="handleLogout()" class="bg-stone-100/70 text-stone-600 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[10px] md:text-xs font-bold hover:bg-rose-100 hover:text-rose-700 transition-colors border border-stone-200/40">Sign Out</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-2xl mx-auto p-3 md:p-4">
+        <!-- Welcome Card -->
+        <div class="welcome-badge p-3 md:p-4 rounded-2xl flex justify-between items-center shadow-sm border border-rose-100/30 mb-4">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">💬</span>
+                <span class="text-xs md:text-sm font-medium text-stone-700">Chat Support</span>
+                <span id="guest-badge" class="guest-badge hidden">Guest</span>
+            </div>
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400" id="user-status-dot"></span>
+        </div>
+
+        <!-- Chat Container -->
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl md:rounded-3xl shadow-sm border border-rose-100/60 overflow-hidden chat-panel">
+
+            <!-- Header (fixed) -->
+            <div class="p-4 bg-rose-50/50 border-b border-rose-100/40 flex items-center gap-3 chat-header">
+                <span class="text-2xl">🤖</span>
+                <div>
+                    <h3 class="font-bold text-stone-800 text-sm">ChokeSafe Assistant</h3>
+                    <p class="text-[10px] text-stone-500">Online • Ready to help</p>
+                </div>
+            </div>
+
+            <!-- Chat Messages (scrollable) -->
+            <div id="chat-messages" class="chat-messages-scroll space-y-3"></div>
+
+            <!-- Quick Reply Buttons & Input (fixed footer) -->
+            <div class="chat-footer">
+                <div class="px-4 pb-2 flex gap-2 flex-wrap border-b border-stone-100/60">
+                    <button onclick="quickChat('How does the scanner work?')" class="text-[10px] bg-stone-100 text-stone-600 px-3 py-1.5 rounded-full hover:bg-stone-200 transition-colors">🔍 How scanner works</button>
+                    <button onclick="quickChat('What does High Risk mean?')" class="text-[10px] bg-stone-100 text-stone-600 px-3 py-1.5 rounded-full hover:bg-stone-200 transition-colors">⚠️ High Risk meaning</button>
+                    <button onclick="quickChat('How to prepare food safely?')" class="text-[10px] bg-stone-100 text-stone-600 px-3 py-1.5 rounded-full hover:bg-stone-200 transition-colors">🍽️ Food safety tips</button>
+                    <button onclick="quickChat('How to submit feedback?')" class="text-[10px] bg-stone-100 text-stone-600 px-3 py-1.5 rounded-full hover:bg-stone-200 transition-colors">📝 Submit feedback</button>
+                    <button onclick="quickChat('Help')" class="text-[10px] bg-stone-100 text-stone-600 px-3 py-1.5 rounded-full hover:bg-stone-200 transition-colors">💬 Help</button>
+                    <button onclick="clearChat()" class="text-[10px] bg-rose-50 text-rose-600 px-3 py-1.5 rounded-full hover:bg-rose-100 transition-colors">🗑️ Clear chat</button>
+                </div>
+
+                <div class="p-4 bg-stone-50/60">
+                    <div class="flex gap-2">
+                        <input type="text" id="chat-input" placeholder="Type your question..." class="flex-1 px-4 py-2.5 bg-white border border-stone-200 rounded-xl focus:outline-none focus:border-rose-400 text-sm" onkeydown="if(event.key==='Enter') sendChatMessage()">
+                        <button onclick="sendChatMessage()" class="btn-primary-rose px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm whitespace-nowrap">
+                            Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3 text-center text-[10px] text-stone-400">
+            💾 Chats are saved automatically in your browser
+        </div>
+    </main>
+
+    <script src="auth.js"></script>
+    <script>
+        // ─── HAMBURGER TOGGLE ──────────────────────────────────────────────
+        function toggleNav() {
+            document.getElementById('nav-links').classList.toggle('open');
+        }
+
+        // ─── CHATBOT RESPONSES (EXPANDED WITH FEATURES) ───────────────────
+        const chatbotResponses = {
+            // --- App overview ---
+            'what is chokesafe': 'ChokeSafe is a smart food safety app that uses AI to assess choking risks based on the RBI L2P4011 framework. You can scan foods, view safety guides, track history, and get personalised advice for children, seniors, and anyone with swallowing difficulties.',
+            'about': 'ChokeSafe is a smart food safety app that uses AI to assess choking risks based on the RBI L2P4011 framework. You can scan foods, view safety guides, track history, and get personalised advice for children, seniors, and anyone with swallowing difficulties.',
+
+            // --- Scanner ---
+            'how does the scanner work': 'Our scanner uses AI to analyze food images or descriptions. It checks shape, texture, and size against RBI L2P4011 guidelines to determine choking risk levels: High, Medium, or Safe. Simply upload a photo or describe the food and click "Analyze"!',
+            'how to scan': 'You can scan food in two ways: (1) Upload a photo – click the upload area, select an image, then click "Analyze Safety". (2) Use your camera – tap the "Camera" button, capture a photo, then click "Analyze". You can also type a food name in the text box and click "Analyze" for a quick assessment.',
+            'upload image': 'To upload an image, go to the Scan page and click the upload area (the box with "Click to upload photo"). Select a JPG, PNG, or WEBP file from your device. The image will appear, then click "Analyze Safety" to get the risk assessment.',
+            'camera': 'Tap the "Camera" button on the Scan page to activate your phone/computer camera. Point at the food, then tap "Capture". The image will be previewed, and you can then click "Analyze Safety" for the assessment.',
+            'take photo': 'Tap the "Camera" button on the Scan page to activate your phone/computer camera. Point at the food, then tap "Capture". The image will be previewed, and you can then click "Analyze Safety" for the assessment.',
+            'analyze': 'After uploading or capturing an image, click the red "Analyze Safety" button. The AI will process the image and show you the food name, risk level (High/Medium/Safe), reason, and preparation advice. You can also report any issues with the result.',
+
+            // --- Guide ---
+            'guide': 'The Safety Guide (Guide page) provides comprehensive information about pediatric food safety based on the L2P4011 Physical Risk Assessment. It includes risk classification tables for High, Medium, and Safe foods, plus mandatory modifications and preparation tips for children, seniors, and vulnerable individuals.',
+            'what is the guide': 'The Safety Guide (Guide page) provides comprehensive information about pediatric food safety based on the L2P4011 Physical Risk Assessment. It includes risk classification tables for High, Medium, and Safe foods, plus mandatory modifications and preparation tips for children, seniors, and vulnerable individuals.',
+            'safety guide': 'The Safety Guide (Guide page) provides comprehensive information about pediatric food safety based on the L2P4011 Physical Risk Assessment. It includes risk classification tables for High, Medium, and Safe foods, plus mandatory modifications and preparation tips for children, seniors, and vulnerable individuals.',
+
+            // --- Feedback / Report ---
+            'how to submit feedback': 'To submit feedback, go to the Report page (click "Report" in the navigation). Select the type of feedback, fill in the subject and description, rate the app, and optionally add your phone number. Click "Submit Feedback" – it will be sent to the admin for review.',
+            'report issue': 'You can report any issue by going to the Report page (click "Report" in the navigation). You can report scanning issues, app bugs, or general feedback about the app.',
+            'feedback': 'The Report page lets you submit feedback about scanning issues, bugs, suggestions, or general comments. You can also rate the app and see your previous reports.',
+
+            // --- History ---
+            'history': 'The History page (click "History" in the navigation) shows all your past scan records. Each entry displays the food name, timestamp, risk level, reason, and advice. You can delete individual records or clear all history.',
+            'scan history': 'The History page (click "History" in the navigation) shows all your past scan records. Each entry displays the food name, timestamp, risk level, reason, and advice. You can delete individual records or clear all history.',
+            'view history': 'Click "History" in the navigation to see your scan records. They are saved automatically and grouped by date.',
+
+            // --- Account / Profile ---
+            'account': 'The Account page (click "Account" in the navigation) lets you view and edit your profile. You can update your full name and phone number, see your scan risk metrics (High/Medium/Safe counts), and delete your account permanently.',
+            'profile': 'The Account page (click "Account" in the navigation) lets you view and edit your profile. You can update your full name and phone number, see your scan risk metrics (High/Medium/Safe counts), and delete your account permanently.',
+            'edit profile': 'On the Account page, click "Edit" to change your full name or phone number. After making changes, click "Save Changes" – your profile will be updated across the app.',
+            'delete account': 'On the Account page, scroll to the "Danger Zone" section and click "Delete My Account". Confirm the action – your profile and all scan history will be permanently removed. This cannot be undone.',
+
+            // --- Risk levels (already there, but we keep) ---
+            'what does high risk mean': '⚠️ High Risk foods have spherical, cylindrical, or sticky/chewy shapes that can block a child\'s airway. Examples include whole grapes, hot dogs, nuts, and hard candies. Always prepare these foods with care – slice lengthwise, quarter, or avoid for children under 4. *For seniors or anyone with swallowing difficulties, the same precautions apply – cut into small pieces and supervise during eating.*',
+            'what does medium risk mean': '🟡 Medium Risk foods have firm textures that require chewing. Examples include apples, carrots, meat, and some vegetables. Cut into small pieces (under 1.6cm) and cook until soft when serving to young children. **For the elderly or those with reduced chewing ability, steam or boil until very soft, and cut into tiny bite-sized portions.**',
+            'what does safe risk mean': '🟢 Safe foods have soft textures that break down easily. Examples include yogurt, purees, mashed potatoes, and soft fruits like bananas. No mandatory modifications needed, but always supervise children while eating. *For seniors, ensure the food is at a comfortable temperature and easy to swallow without choking.*',
+            'low risk': '🟢 Low risk foods are the same as "Safe" – soft, easily dissolvable, or liquid. They pose minimal choking risk for all age groups, but always consider individual chewing abilities.',
+            'what is medium risk level': '🟡 Medium Risk foods require chewing and can be a choking hazard if not cut properly. Examples: apples, carrots, meat, some vegetables. Always cut into small pieces (under 1.6cm) and cook until soft – especially for children and seniors.',
+            'what is high risk level': '⚠️ High Risk foods are spherical, cylindrical, or sticky – they can block airways. Examples: whole grapes, hot dogs, nuts, hard candies. For children under 4, avoid completely or modify (quarter grapes, slice hot dogs lengthwise). The same applies to elderly with swallowing issues.',
+            'risk level': 'We classify foods into High, Medium, and Safe based on shape, texture, and consistency. High risk – can block airway. Medium – requires chewing. Safe – soft and easy to swallow. Always consider the age and ability of the eater.',
+            'risks': 'We classify foods into High, Medium, and Safe based on shape, texture, and consistency. High risk – can block airway. Medium – requires chewing. Safe – soft and easy to swallow. Always consider the age and ability of the eater.',
+            'choking': 'Choking occurs when food blocks the airway. High risk foods include grapes, hot dogs, nuts, and hard candies. For children under 4 and seniors, always modify foods: cut into small pieces, cook until soft, and supervise eating. Learn the Heimlich maneuver for emergencies.',
+
+            // --- Seniors / vulnerable (already there) ---
+            'senior': '👴 Seniors are at increased choking risk due to reduced chewing ability, dry mouth, or neurological conditions. Always cut food into small pieces, cook until soft, and avoid spherical or sticky foods. Encourage slow eating and drinking plenty of water with meals.',
+            'elderly': '👴 Seniors are at increased choking risk due to reduced chewing ability, dry mouth, or neurological conditions. Always cut food into small pieces, cook until soft, and avoid spherical or sticky foods. Encourage slow eating and drinking plenty of water with meals.',
+            'vulnerable': '🧓 Anyone with swallowing difficulties (dysphagia), neurological disorders, or reduced muscle control should follow a modified diet: pureed or minced foods, thickened liquids, and avoid mixed textures. Consult a speech therapist for personalised advice.',
+            'old people': '👴 Older adults are more prone to choking. Follow the same precautions as for children: cut food into small pieces, avoid hard/sticky items, and supervise meals. Consider softer alternatives like stews, smoothies, and purees.',
+            'adult': '🧑 Adults are generally at lower choking risk, but anyone with dental issues, dry mouth, or eating too quickly can still choke. Always chew thoroughly, avoid talking while eating, and cut large pieces into manageable sizes.',
+
+            // --- Food safety tips (already there) ---
+            'how to prepare food safely': '🍽️ Always cut food into small pieces (under 1.6cm). Cook hard vegetables until soft. Never serve whole grapes, hot dogs, or nuts to children under 4. Remove seeds and pits from fruits. Always supervise children while eating. **For seniors, puree or mince meats, avoid sticky foods, and ensure liquids are thickened if swallowing is difficult.**',
+            'food safety tips': '🍽️ Always cut food into small pieces (under 1.6cm). Cook hard vegetables until soft. Never serve whole grapes, hot dogs, or nuts to children under 4. Remove seeds and pits from fruits. Always supervise children while eating. **For seniors, puree or mince meats, avoid sticky foods, and ensure liquids are thickened if swallowing is difficult.**',
+            'safe preparation': '🍽️ Always cut food into small pieces (under 1.6cm). Cook hard vegetables until soft. Never serve whole grapes, hot dogs, or nuts to children under 4. Remove seeds and pits from fruits. Always supervise children while eating. **For seniors, puree or mince meats, avoid sticky foods, and ensure liquids are thickened if swallowing is difficult.**',
+
+            // --- Emergency (already there) ---
+            'emergency': '🚨 If someone is choking and cannot breathe, call emergency services immediately. Perform the Heimlich maneuver (abdominal thrusts) for adults and children over 1 year. For infants under 1, use back blows and chest thrusts. Learn first aid from a certified course.',
+            'heimlich': 'The Heimlich maneuver (abdominal thrusts) is used to dislodge food from the airway. For adults and children over 1: stand behind, wrap arms around waist, make a fist, and thrust inward and upward. For infants under 1: use 5 back blows and 5 chest thrusts. Always call emergency services if the object is not dislodged.',
+
+            // --- General help & greetings (already there) ---
+            'help': 'I can help you with scanning foods, understanding risk levels (High/Medium/Safe), food safety tips, reporting issues, and general app questions. Just ask!',
+            'hello': 'Hello! 👋 How can I help you today? You can ask about scanning, risk levels, or food safety tips.',
+            'hi': 'Hi there! 👋 How can I assist you with ChokeSafe today?',
+            'thank': 'You\'re welcome! 😊 Is there anything else I can help you with?',
+            'thanks': 'You\'re welcome! 😊 Is there anything else I can help you with?',
+        };
+
+        function getBotResponse(message) {
+            const lower = message.toLowerCase().trim();
+
+            // First, check for exact or partial matches in the response keys
+            for (const [key, response] of Object.entries(chatbotResponses)) {
+                if (lower.includes(key)) return response;
+            }
+
+            // If no match, try to detect specific topics using keyword groups
+            if (lower.includes('what') || lower.includes('how') || lower.includes('why') || lower.includes('when')) {
+                if (lower.includes('risk') || lower.includes('level')) {
+                    return "We classify foods into High, Medium, and Safe based on shape, texture, and consistency. High risk – can block airway. Medium – requires chewing. Safe – soft and easy to swallow. Always consider the age and ability of the eater. For more details, ask about a specific risk level.";
+                }
+                if (lower.includes('senior') || lower.includes('elderly') || lower.includes('old') || lower.includes('vulnerable')) {
+                    return "👴 Seniors and vulnerable individuals are at higher choking risk. Always cut food into small pieces, cook until soft, avoid sticky or round foods, and supervise meals. Thicken liquids if swallowing is difficult. Consult a doctor for personalised advice.";
+                }
+                if (lower.includes('choke') || lower.includes('choking')) {
+                    return "Choking occurs when food blocks the airway. High risk foods include grapes, hot dogs, nuts, and hard candies. For children under 4 and seniors, always modify foods: cut into small pieces, cook until soft, and supervise eating. Learn the Heimlich maneuver for emergencies.";
+                }
+                if (lower.includes('scan') || lower.includes('scanner') || lower.includes('upload') || lower.includes('camera')) {
+                    return "You can scan food by uploading an image, using your camera, or typing a food name. Go to the Scan page, choose your method, and click 'Analyze Safety' to get the risk assessment.";
+                }
+                if (lower.includes('guide')) {
+                    return "The Safety Guide provides detailed risk classification tables and preparation advice for children, seniors, and vulnerable individuals. Check the Guide page for comprehensive information.";
+                }
+                if (lower.includes('feedback') || lower.includes('report')) {
+                    return "You can submit feedback or report an issue via the Report page. Choose the type, fill in the details, rate the app, and submit. Your feedback helps us improve ChokeSafe.";
+                }
+                if (lower.includes('history')) {
+                    return "The History page shows all your past scan records. You can review, delete individual entries, or clear all history.";
+                }
+                if (lower.includes('account') || lower.includes('profile')) {
+                    return "The Account page lets you edit your profile, view your scan risk metrics, and delete your account. Click 'Account' in the navigation to manage your settings.";
+                }
+                // General fallback for "what/how" questions
+                return "That's a great question! I'm not entirely sure about that specific topic. You can ask me about the scanner, risk levels (High/Medium/Safe), food safety tips for children or seniors, or how to report an issue. Or you can check our Safety Guide page for more information!";
+            }
+
+            // Final fallback
+            return "I'm not sure about that. 🤔 You can ask me about the scanner, risk levels (High/Medium/Safe), food safety tips for children and seniors, or how to report an issue!";
+        }
+
+        // ─── SEND MESSAGE ──────────────────────────────────────────────────
+        function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            const chatContainer = document.getElementById('chat-messages');
+            
+            const userMsg = document.createElement('div');
+            userMsg.className = 'chat-message chat-bubble-user p-3 max-w-[85%] ml-auto text-white text-sm';
+            userMsg.textContent = message;
+            chatContainer.appendChild(userMsg);
+            
+            input.value = '';
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            saveChatMessage('user', message);
+            
+            setTimeout(() => {
+                const response = getBotResponse(message);
+                const botMsg = document.createElement('div');
+                botMsg.className = 'chat-message chat-bubble-bot p-3 max-w-[85%] text-sm';
+                botMsg.textContent = response;
+                chatContainer.appendChild(botMsg);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                saveChatMessage('bot', response);
+            }, 500);
+        }
+
+        function quickChat(message) {
+            document.getElementById('chat-input').value = message;
+            sendChatMessage();
+        }
+
+        // ─── CHAT HISTORY ──────────────────────────────────────────────────
+        function saveChatMessage(type, text) {
+            const phone = sessionStorage.getItem('current_session_phone') || 'guest';
+            const key = `chat_history_${phone}`;
+            let history = JSON.parse(localStorage.getItem(key) || '[]');
+            history.push({ type, text, timestamp: new Date().toISOString() });
+            if (history.length > 100) history = history.slice(-100);
+            localStorage.setItem(key, JSON.stringify(history));
+        }
+
+        function loadChatHistory() {
+            const phone = sessionStorage.getItem('current_session_phone') || 'guest';
+            const key = `chat_history_${phone}`;
+            const history = JSON.parse(localStorage.getItem(key) || '[]');
+            
+            const chatContainer = document.getElementById('chat-messages');
+            chatContainer.innerHTML = `
+                <div class="chat-message chat-bubble-bot p-3 max-w-[85%]">
+                    👋 Hi there! I'm your ChokeSafe assistant. I can help you with:
+                    <ul class="list-disc list-inside text-xs mt-1 space-y-0.5">
+                        <li>How to use the scanner</li>
+                        <li>Understanding risk levels (High / Medium / Safe)</li>
+                        <li>Food preparation safety tips for children and seniors</li>
+                        <li>App features: Guide, History, Account, Report</li>
+                    </ul>
+                    <p class="text-xs text-stone-400 mt-2">💡 Your chat history is saved automatically.</p>
+                </div>
+            `;
+            history.forEach(msg => {
+                const div = document.createElement('div');
+                if (msg.type === 'user') {
+                    div.className = 'chat-message chat-bubble-user p-3 max-w-[85%] ml-auto text-white text-sm';
+                } else {
+                    div.className = 'chat-message chat-bubble-bot p-3 max-w-[85%] text-sm';
+                }
+                div.textContent = msg.text;
+                chatContainer.appendChild(div);
+            });
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function clearChat() {
+            if (!confirm('Clear all chat history? This cannot be undone.')) return;
+            const phone = sessionStorage.getItem('current_session_phone') || 'guest';
+            const key = `chat_history_${phone}`;
+            localStorage.removeItem(key);
+            loadChatHistory();
+        }
+
+        // ─── UPDATE GUEST BADGE ───────────────────────────────────────────
+        function updateGuestBadge() {
+            const isGuest = sessionStorage.getItem('session_is_guest') === 'true' || 
+                           sessionStorage.getItem('current_session_phone') === 'GUEST_USER';
+            const badge = document.getElementById('guest-badge');
+            if (isGuest) badge.classList.remove('hidden');
+            else badge.classList.add('hidden');
+        }
+
+        // ─── INIT ──────────────────────────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', function() {
+            updateGuestBadge();
+            loadChatHistory();
+        });
+    </script>
+</body>
+</html>

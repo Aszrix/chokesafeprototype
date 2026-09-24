@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>ChokeSafe | Menu</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 30%, #fecdd3 70%, #fda4af 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        .menu-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border-radius: 2rem;
+            padding: 2.5rem 2rem;
+            max-width: 480px;
+            width: 100%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.2);
+            transition: transform 0.2s ease;
+        }
+        .menu-card:hover {
+            transform: translateY(-2px);
+        }
+        .logo-icon {
+            background: linear-gradient(135deg, #e11d48, #be123c);
+            width: 4.5rem;
+            height: 4.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            box-shadow: 0 8px 24px rgba(225, 29, 72, 0.25);
+        }
+        .logo-icon span {
+            font-size: 2.5rem;
+        }
+        .feature-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px rgba(190, 18, 60, 0.15);
+            background: white;
+            border-color: #e11d48;
+        }
+        .feature-card .icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .feature-card h3 {
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .feature-card p {
+            color: #94a3b8;
+            font-size: 0.8rem;
+        }
+        @media (max-width: 480px) {
+            .menu-card {
+                padding: 1.5rem 1.25rem;
+                border-radius: 1.5rem;
+            }
+            .logo-icon {
+                width: 3.5rem;
+                height: 3.5rem;
+            }
+            .logo-icon span {
+                font-size: 2rem;
+            }
+            .feature-card {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="menu-card">
+        <!-- Icon -->
+        <div class="logo-icon">
+            <span>🛡️</span>
+        </div>
+
+        <h1 class="text-2xl font-black text-center text-rose-700 tracking-tight">ChokeSafe</h1>
+        <p class="text-center text-stone-500 text-sm mt-1 mb-6">Smart food safety platform</p>
+
+        <p class="text-stone-600 text-sm text-center mb-4">Choose your destination</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- User side -->
+            <a href="user/index.html" class="feature-card block rounded-2xl p-5 text-center hover:border-rose-200">
+                <div class="icon">👤</div>
+                <h3>User App</h3>
+                <p>Scan food, view history, and more</p>
+            </a>
+            <!-- Admin side -->
+            <a href="admin/index.html" class="feature-card block rounded-2xl p-5 text-center hover:border-rose-200">
+                <div class="icon">⚙️</div>
+                <h3>Admin Panel</h3>
+                <p>Manage data, view analytics</p>
+            </a>
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-stone-200/60 text-center">
+            <p class="text-xs text-stone-400">© 2026 ChokeSafe. All rights reserved.</p>
+        </div>
+    </div>
+
+</body>
+</html>

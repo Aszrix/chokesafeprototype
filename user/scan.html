@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>ChokeSafe | Scan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+    <style>
+        /* ─── ALL ORIGINAL SCANNER STYLES ────────────────────────────── */
+        .view { display: none; }
+        .view.active { display: block; }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .spinner { border: 3px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 3px solid white; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .feedback-btn { transition: all 0.2s ease; }
+        .feedback-btn:hover { transform: scale(1.05); }
+        .text-input-area { border: 2px dashed #e5e7eb; border-radius: 16px; padding: 12px; transition: all 0.3s ease; }
+        .text-input-area:focus-within { border-color: #e11d48; background: #fef2f2; }
+        .stress-test-badge { position: fixed; bottom: 20px; right: 20px; background: #1e293b; color: #94a3b8; padding: 8px 16px; border-radius: 9999px; font-size: 10px; font-weight: 600; z-index: 50; cursor: help; }
+        .stress-test-badge:hover { background: #0f172a; color: #e2e8f0; }
+
+        .result-modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center; z-index: 999;
+            opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease;
+            padding: 20px;
+        }
+        .result-modal-overlay.active { opacity: 1; visibility: visible; }
+        .result-modal-card {
+            max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;
+            background: white; border-radius: 24px; padding: 32px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            transform: scale(0.9) translateY(20px); transition: transform 0.3s ease;
+        }
+        .result-modal-overlay.active .result-modal-card { transform: scale(1) translateY(0); }
+        .modal-close-btn {
+            position: absolute; top: 16px; right: 16px;
+            background: #f1f5f9; border: none; border-radius: 50%; width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+            color: #475569; cursor: pointer; transition: background 0.2s;
+        }
+        .modal-close-btn:hover { background: #e2e8f0; color: #1e293b; }
+        #results { display: none !important; }
+
+        /* ─── HAMBURGER MENU ────────────────────────────────────────────── */
+        .nav-links { display: flex; gap: 1rem; align-items: center; }
+        .hamburger { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #1e293b; padding: 0.25rem 0.5rem; }
+        @media (max-width: 640px) {
+            .nav-links { display: none; flex-direction: column; gap: 0.5rem; padding: 0.75rem 0; width: 100%; align-items: flex-start; }
+            .nav-links.open { display: flex; }
+            .hamburger { display: block; }
+            .nav-container { flex-wrap: wrap; }
+            .nav-links button { font-size: 0.9rem !important; padding: 0.4rem 0 !important; }
+            .drop-zone { padding: 1.5rem !important; min-height: 100px; }
+            .result-modal-card { padding: 20px; margin: 10px; max-height: 95vh; }
+            .text-input-area input { font-size: 16px; }
+            #video-feed, #preview { max-height: 50vh !important; min-height: 300px !important; object-fit: cover !important; }
+            .camera-preview-wrapper {
+                border-radius: 0 !important;
+                margin-left: -0.75rem !important;
+                margin-right: -0.75rem !important;
+                width: calc(100% + 1.5rem) !important;
+            }
+        }
+        @media (max-width: 400px) {
+            .drop-zone { padding: 1rem !important; }
+            .text-input-area button { font-size: 0.75rem; padding: 0.5rem 0.75rem; }
+            #video-feed, #preview { max-height: 45vh !important; min-height: 250px !important; }
+        }
+        .drop-zone { min-height: 120px; }
+
+        .camera-preview-wrapper {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+            border-radius: 12px;
+            background: #1a1a2e;
+        }
+        #video-feed, #preview {
+            width: 100%;
+            max-height: 400px;
+            min-height: 200px;
+            object-fit: cover;
+            border-radius: 12px;
+        }
+        @media (max-width: 640px) {
+            #video-feed, #preview {
+                max-height: 55vh !important;
+                min-height: 320px !important;
+                object-fit: cover !important;
+                border-radius: 0 !important;
+            }
+            .camera-preview-wrapper {
+                border-radius: 0 !important;
+                margin-left: -0.75rem !important;
+                margin-right: -0.75rem !important;
+                width: calc(100% + 1.5rem) !important;
+            }
+            .camera-btn-mobile {
+                font-size: 0.8rem !important;
+                padding: 0.75rem 0.5rem !important;
+            }
+        }
+
+        /* ─── UI STYLES ────────────────────────────────────────────────── */
+        .btn-primary-rose {
+            background: linear-gradient(135deg, #e11d48, #be123c);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .btn-primary-rose:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(225, 29, 72, 0.3);
+        }
+        .btn-primary-rose:disabled {
+            opacity: 0.5;
+            transform: none;
+            box-shadow: none;
+        }
+        .btn-outline-rose {
+            border: 2px solid #e11d48;
+            color: #e11d48;
+            transition: all 0.3s ease;
+        }
+        .btn-outline-rose:hover {
+            background: #e11d48;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(225, 29, 72, 0.15);
+        }
+        .nav-link-custom {
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        .nav-link-custom::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #e11d48;
+            transition: width 0.3s ease;
+        }
+        .nav-link-custom:hover::after {
+            width: 100%;
+        }
+        .nav-link-custom.active::after {
+            width: 100%;
+        }
+        .guest-badge {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            color: #92400e;
+            font-size: 10px;
+            padding: 2px 12px;
+            border-radius: 9999px;
+            font-weight: 600;
+        }
+        .input-focus-ring:focus {
+            outline: none;
+            border-color: #e11d48;
+            box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.12);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-stone-50 via-white to-stone-100 min-h-screen text-stone-800 font-sans antialiased">
+
+    <!-- Stress Test Badge -->
+    <div id="stress-test-badge" class="stress-test-badge hidden" title="Stress Test Mode Active - Testing edge cases">
+        🧪 Stress Test Mode
+    </div>
+
+    <!-- ─── NAVIGATION ──────────────────────────────────────────────────── -->
+    <nav class="bg-white/90 backdrop-blur-md border-b border-rose-100/60 p-3 md:p-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-2xl mx-auto flex justify-between items-center nav-container">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🛡️</span>
+                <h1 class="font-black text-xl md:text-2xl text-rose-700 tracking-tight cursor-pointer hover:text-rose-800 transition-colors" onclick="window.location.href='homepage.html'">ChokeSafe</h1>
+            </div>
+            <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+            <div class="nav-links" id="nav-links">
+                <button onclick="window.location.href='homepage.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Home</button>
+                <button onclick="window.location.href='scan.html'" class="nav-link-custom text-rose-600 font-medium text-xs md:text-sm active">Scan</button>
+                <button onclick="window.location.href='chatbot.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Chat</button>
+                <button onclick="window.location.href='report.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Report</button>
+                <button id="nav-history-btn" onclick="window.location.href='history.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm hidden">History</button>
+                <button onclick="window.location.href='guide.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Guide</button>
+                <button id="nav-account-btn" onclick="window.location.href='account.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm hidden">Account</button>
+                <button onclick="handleLogout()" class="bg-stone-100/70 text-stone-600 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[10px] md:text-xs font-bold hover:bg-rose-100 hover:text-rose-700 transition-colors border border-stone-200/40">Sign Out</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-2xl mx-auto p-3 md:p-4">
+
+        <!-- ─── ANALYZER VIEW ────────────────────────────────────────────── -->
+        <div id="analyzer" class="view active fade-in">
+            <button onclick="window.location.href='homepage.html'" class="mb-3 text-xs md:text-sm text-rose-600 font-semibold hover:underline inline-flex items-center gap-1 bg-rose-50/50 px-3 py-1.5 rounded-lg hover:bg-rose-100 transition-colors">
+                <span>←</span> Back to Home
+            </button>
+            <div class="bg-white/90 backdrop-blur-sm p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-sm border border-rose-100/60">
+                <h2 class="text-xl md:text-2xl font-bold mb-4 text-stone-900 flex items-center gap-2">
+                    <span>🔬</span> Analyze Food
+                </h2>
+
+                <!-- Text Input Alternative -->
+                <div class="text-input-area mb-4 p-3 bg-stone-50/60">
+                    <label class="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">💬 Describe the food:</label>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input type="text" id="food-description" placeholder="e.g., Fishball, Watermelon, Porridge" class="flex-1 px-3 md:px-4 py-2.5 bg-white border border-stone-200 rounded-xl focus:outline-none input-focus-ring text-sm md:text-base placeholder:text-stone-400">
+                        <button onclick="analyzeTextDescription()" class="btn-primary-rose px-4 md:px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm whitespace-nowrap">
+                            🔍 Analyze
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-stone-400 mt-1.5">💡 Type a food name and click Analyze for instant assessment</p>
+                </div>
+
+                <!-- Divider -->
+                <div class="flex items-center gap-4 my-4">
+                    <div class="flex-1 border-t border-stone-200/60"></div>
+                    <span class="text-[10px] text-stone-400 font-medium uppercase tracking-wider">or upload image</span>
+                    <div class="flex-1 border-t border-stone-200/60"></div>
+                </div>
+
+                <!-- Camera Preview -->
+                <div class="camera-preview-wrapper">
+                    <div id="drop-zone" class="drop-zone border-2 border-dashed border-rose-200/60 rounded-2xl p-4 md:p-8 text-center cursor-pointer hover:border-rose-400 transition-all overflow-hidden bg-stone-50/60 min-h-[120px] flex items-center justify-center hover:bg-stone-50">
+                        <input type="file" id="file-input" accept="image/*" class="hidden">
+                        <div id="upload-prompt" class="space-y-2">
+                            <div class="text-rose-400 mx-auto text-3xl md:text-4xl">📷</div>
+                            <p class="text-stone-600 text-sm md:text-base font-medium">Click to upload photo</p>
+                            <p class="text-stone-400 text-[10px] md:text-xs">Supported: JPG, PNG, WEBP</p>
+                        </div>
+                        <img id="preview" class="hidden max-h-64 md:max-h-96 mx-auto rounded-xl shadow-lg object-contain" alt="Preview">
+                        <video id="video-feed" class="hidden w-full rounded-xl shadow-lg bg-stone-900 object-cover" autoplay playsinline></video>
+                    </div>
+                </div>
+
+                <!-- Camera Buttons -->
+                <div class="flex gap-2 md:gap-3 mt-3">
+                    <button id="camera-btn" class="camera-btn-mobile flex-1 bg-rose-50 text-rose-700 py-2.5 md:py-3 rounded-xl text-sm font-bold hover:bg-rose-100 transition-colors flex items-center justify-center gap-1.5 border border-rose-200/40">
+                        <span>📷</span> Camera
+                    </button>
+                    <button id="capture-btn" class="hidden flex-1 bg-emerald-600 text-white py-2.5 md:py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                        <span>📸</span> Capture
+                    </button>
+                </div>
+
+                <!-- Analyze Button -->
+                <button id="analyze-btn" class="w-full mt-3 btn-primary-rose py-3 md:py-4 rounded-xl text-sm font-bold shadow-lg hidden transition-all flex items-center justify-center gap-3">
+                    <span id="btn-text">Analyze Safety</span>
+                    <div id="loading-spinner" class="spinner hidden"></div>
+                </button>
+
+                <!-- Hidden original results – kept for compatibility -->
+                <div id="results" class="hidden"></div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- ─── RESULT MODAL ────────────────────────────────────────────────── -->
+    <div id="result-modal" class="result-modal-overlay" onclick="if(event.target===this) closeResultModal()">
+        <div class="result-modal-card relative">
+            <button class="modal-close-btn" onclick="closeResultModal()">✕</button>
+            <div id="modal-status-card" class="p-2 rounded-xl">
+                <h2 id="modal-food-name" class="font-bold text-xl md:text-2xl text-stone-900"></h2>
+                <p id="modal-risk-level" class="font-medium mt-1 text-base md:text-lg"></p>
+                <p id="modal-recommendation" class="text-xs md:text-sm mt-3 text-stone-700 leading-relaxed"></p>
+                <div id="modal-offline-note" class="hidden text-xs text-amber-600 mt-2 font-medium">ℹ️ Analyzed offline</div>
+
+                <!-- ─── NEW: Single Report Issue Button ────────────────── -->
+                <div class="mt-4 md:mt-6 pt-3 md:pt-4 border-t border-stone-200">
+                    <button onclick="reportIssue()" class="w-full btn-outline-rose py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all">
+                        <span>📝</span> Report Issue
+                    </button>
+                    <p class="text-[10px] text-stone-400 text-center mt-1.5">Help us improve by reporting any concerns</p>
+                </div>
+
+                <div id="modal-news-section" class="mt-4 md:mt-6 pt-3 md:pt-4 border-t border-stone-200 hidden">
+                    <h4 class="text-xs md:text-sm font-semibold text-stone-700 mb-2">📰 Recent News & Alerts</h4>
+                    <div id="modal-news-list" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── FEEDBACK MODAL REMOVED ──────────────────────────────────────── -->
+    <!-- All feedback now goes through report.html -->
+
+    <script src="auth.js"></script>
+    <script>
+        // ─── HAMBURGER TOGGLE ──────────────────────────────────────────────
+        function toggleNav() {
+            document.getElementById('nav-links').classList.toggle('open');
+        }
+
+        // ─── REPORT ISSUE: Redirect to report.html ────────────────────────
+        function reportIssue() {
+            const foodName = document.getElementById('modal-food-name').textContent || 'Unknown';
+            window.location.href = `report.html?food=${encodeURIComponent(foodName)}`;
+        }
+
+        // ─── ALL ORIGINAL SCANNER CODE ──────────────────────────────────────
+        const fileInput = document.getElementById('file-input');
+        const dropZone = document.getElementById('drop-zone');
+        const preview = document.getElementById('preview');
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const btnText = document.getElementById('btn-text');
+        const spinner = document.getElementById('loading-spinner');
+        const video = document.getElementById('video-feed');
+        const cameraBtn = document.getElementById('camera-btn');
+        const captureBtn = document.getElementById('capture-btn');
+        const uploadPrompt = document.getElementById('upload-prompt');
+        let stream = null;
+        let isCaptured = false;
+
+        // ─── ORIGINAL API CALL ──────────────────────────────────────────────
+        analyzeBtn.onclick = async () => {
+            const apiKey = "AQ.Ab8RN6Lz6GB0tS3X50eaHNtPl9LyyqQ2fb7oMj-rikrM4Da1rA"; 
+            const base64Image = preview.src.split(',')[1];
+            if(!base64Image) return;
+
+            btnText.textContent = "Processing...";
+            spinner.classList.remove('hidden');
+            analyzeBtn.disabled = true;
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash-lite:generateContent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: "Identify the food item and perform a comprehensive pediatric choking physical risk assessment. Consider consistency, shape (spherical, oval, etc.), and standard modifications. Respond ONLY in a valid raw JSON object matching this schema exactly: {\"name\": \"food name\", \"risk_level\": \"High\"|\"Medium\"|\"Safe\", \"reason\": \"explanation of why\", \"advice\": \"preparation guidance\"}. Do not use markdown wraps or extra descriptions." },
+                                { inlineData: { mimeType: "image/png", data: base64Image } }
+                            ]
+                        }]
+                    })
+                });
+                
+                const data = await response.json();
+                let resultText = data.candidates[0].content.parts[0].text.trim();
+                resultText = resultText.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+                const result = JSON.parse(resultText);
+                
+                showResultModal(result);
+                
+            } catch (err) { 
+                console.warn('API failed, using fallback for', preview.src);
+                const fallbackName = prompt('Unable to identify the food. Please type the food name (e.g., Fishball, Watermelon):', '');
+                if (fallbackName && fallbackName.trim()) {
+                    const result = getFallbackAssessment(fallbackName.trim());
+                    showResultModal(result, true);
+                } else {
+                    alert('Analysis cancelled.');
+                }
+            } finally { 
+                btnText.textContent = "Analyze Safety"; 
+                spinner.classList.add('hidden');
+                analyzeBtn.disabled = false; 
+            }
+        };
+
+        // ─── TEXT DESCRIPTION ANALYSIS ──────────────────────────────
+        function analyzeTextDescription() {
+            const description = document.getElementById('food-description').value.trim();
+            if (!description) {
+                alert('Please describe the food item.');
+                document.getElementById('food-description').focus();
+                return;
+            }
+            const result = getFallbackAssessment(description);
+            showResultModal(result, true);
+        }
+
+        // ─── FALLBACK ASSESSMENT ──────────────────────────────────────
+        function getFallbackAssessment(foodName) {
+            const lower = foodName.toLowerCase().trim();
+            if (['fishball','meatball','grape','cherry','tomato','nut','pea','berry','olive','gumball','candy','jawbreaker','marshmallow','caramel','gummy','chewing gum'].some(k => lower.includes(k))) {
+                return { name: foodName, risk_level: 'High', reason: '🔴 Spherical, oval, or sticky/chewy shape can occlude the airway. Size often falls in critical range (1.6–4.3cm).', advice: '⚠️ CRITICAL: Slice lengthwise into quarters or thin wedges. Never serve whole to children under 4.' };
+            }
+            if (['hot dog','hotdog','sausage','carrot stick','celery stick','frank','wiener','breadstick'].some(k => lower.includes(k))) {
+                return { name: foodName, risk_level: 'High', reason: '🔴 Cylindrical shape can wedge into the airway and form an airtight seal.', advice: '⚠️ CRITICAL: Slice lengthwise into thin strips, then cut into small pieces.' };
+            }
+            if (['watermelon','melon','apple','pear','peach','plum','apricot','mango','orange','banana','strawberry','blueberry','kiwi','pineapple','papaya'].some(k => lower.includes(k))) {
+                return { name: foodName, risk_level: 'Medium', reason: '🍎 Fruit has firm texture and often spherical/oval shape; requires chewing.', advice: 'Cut into thin slices or small cubes (under 1.6cm). Remove seeds/pits.' };
+            }
+            if (['broccoli','cauliflower','cabbage','lettuce','spinach','pepper','cucumber','zucchini','eggplant','asparagus','green bean'].some(k => lower.includes(k))) {
+                return { name: foodName, risk_level: 'Medium', reason: '🥦 Vegetables may be firm; require thorough chewing.', advice: 'Cook until soft or cut into very small pieces (under 1.6cm).' };
+            }
+            if (['chicken','beef','pork','fish','lamb','duck','turkey','steak','cutlet','fillet','meat'].some(k => lower.includes(k))) {
+                return { name: foodName, risk_level: 'Medium', reason: '🍖 Meat may be fibrous; requires thorough chewing.', advice: 'Cut into small, tender pieces (under 1.6cm) or shred.' };
+            }
+            if (['chip','cracker','cookie','biscuit','pretzel','popcorn','crisp'].some(k => lower.includes(k))) {
+                return { name: foodName, risk_level: 'Medium', reason: '🍪 Snacks may be hard and break into sharp pieces; can be aspirated.', advice: 'Crush or break into very small pieces for young children.' };
+            }
+            if (['water','juice','milk','soda','drink','beverage','soup','broth','milo','coffee','tea','coke','pepsi','7up','sprite'].some(k => lower.includes(k))) {
+                return { name: foodName, risk_level: 'Safe', reason: '💧 Liquid/beverage – no choking risk.', advice: '✅ Safe to serve. Ensure proper temperature.' };
+            }
+            if (['yogurt','pudding','puree','mashed','smoothie','cereal','rice','pasta','bread','porridge','oatmeal','ice cream','jello','custard'].some(k => lower.includes(k))) {
+                return { name: foodName, risk_level: 'Safe', reason: '✅ Soft texture breaks down easily. Minimal choking risk.', advice: 'No mandatory modifications. Supervise during eating.' };
+            }
+            return { name: foodName, risk_level: 'Medium', reason: '📝 Unknown food – please cut into small pieces and supervise.', advice: 'Cut into pieces under 1.6cm. Always supervise children while eating.' };
+        }
+
+        // ─── CLOSE RESULT MODAL ──────────────────────────────────────
+        function closeResultModal() {
+            document.getElementById('result-modal').classList.remove('active');
+        }
+
+        // ─── NEWS FETCHING (IMPROVED QUERY) ────────────────────────────
+        const NEWS_API_KEY = '2a5a4d6d6cb2497b86a19e8d814c7def';
+
+        async function fetchFoodNews(foodName, limit = 3) {
+            try {
+                // More specific query: food name + choking-related terms
+                const query = `"${foodName}" AND (choking OR "choking hazard" OR "food safety" OR recall OR "risk assessment")`;
+                const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=${limit * 2}&apiKey=${NEWS_API_KEY}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.status === 'ok' && data.articles && data.articles.length) {
+                    // Filter to ensure the food name appears in title or description
+                    const lowerFood = foodName.toLowerCase();
+                    const relevant = data.articles.filter(article => {
+                        const title = (article.title || '').toLowerCase();
+                        const desc = (article.description || '').toLowerCase();
+                        return title.includes(lowerFood) || desc.includes(lowerFood);
+                    });
+                    // Return only the first 'limit' articles
+                    return relevant.slice(0, limit).map(article => ({
+                        title: article.title,
+                        description: article.description || 'Click to read more...',
+                        url: article.url,
+                        source: article.source.name,
+                        publishedAt: new Date(article.publishedAt).toLocaleDateString('en-US', {
+                            year: 'numeric', month: 'short', day: 'numeric'
+                        })
+                    }));
+                }
+                return [];
+            } catch (error) {
+                console.warn('News fetch failed:', error);
+                return [];
+            }
+        }
+
+        // ─── SHOW RESULT MODAL (UPDATED NEWS LOGIC) ──────────────────
+        async function showResultModal(result, isOffline = false) {
+            const modal = document.getElementById('result-modal');
+            
+            const card = document.getElementById('modal-status-card');
+            const color = result.risk_level === 'High' ? 'bg-red-50 border-red-500 text-red-900' : 
+                          result.risk_level === 'Medium' ? 'bg-amber-50 border-amber-500 text-amber-900' : 
+                          'bg-emerald-50 border-emerald-500 text-emerald-900';
+            card.className = `p-2 rounded-xl ${color}`;
+
+            document.getElementById('modal-food-name').textContent = result.name;
+            document.getElementById('modal-risk-level').textContent = `Risk: ${result.risk_level}`;
+            document.getElementById('modal-recommendation').textContent = `${result.reason} ${result.advice}`;
+
+            const note = document.getElementById('modal-offline-note');
+            if (isOffline) {
+                note.classList.remove('hidden');
+            } else {
+                note.classList.add('hidden');
+            }
+
+            window.lastResult = result;
+
+            saveScanToHistory(result.name, result.risk_level, result.reason, result.advice);
+
+            modal.classList.add('active');
+
+            // ─── NEWS SECTION (only if enabled) ──────────────────────────
+            const newsSection = document.getElementById('modal-news-section');
+            const newsList = document.getElementById('modal-news-list');
+            const newsEnabled = localStorage.getItem('feature_news') !== 'false';
+
+            if (newsEnabled) {
+                newsSection.classList.remove('hidden');
+                newsList.innerHTML = '<div class="text-xs text-stone-400">Loading latest news...</div>';
+
+                try {
+                    const cleanName = result.name.replace(/\(from description\)/i, '').trim();
+                    const articles = await fetchFoodNews(cleanName, 3);
+
+                    if (articles.length === 0) {
+                        newsList.innerHTML = '<div class="text-xs text-stone-400">No choking‑related news found for this food.</div>';
+                    } else {
+                        newsList.innerHTML = articles.map(article => `
+                            <div class="text-xs md:text-sm border-b border-stone-100/50 pb-2 last:border-0">
+                                <a href="${article.url}" target="_blank" rel="noopener noreferrer" 
+                                   class="font-medium text-rose-600 hover:underline">
+                                    ${article.title}
+                                </a>
+                                <div class="flex justify-between text-xs text-stone-400 mt-0.5">
+                                    <span>${article.source}</span>
+                                    <span>${article.publishedAt}</span>
+                                </div>
+                                <p class="text-xs text-stone-500 mt-0.5 line-clamp-2">${article.description}</p>
+                            </div>
+                        `).join('');
+                    }
+                } catch (error) {
+                    newsList.innerHTML = '<div class="text-xs text-stone-400">Could not load news at this time.</div>';
+                }
+            } else {
+                newsSection.classList.add('hidden');
+            }
+        }
+
+        // ─── STRESS TEST MODE ─────────────────────────────────────────────
+        let stressTestEnabled = false;
+        function toggleStressTest() {
+            stressTestEnabled = !stressTestEnabled;
+            const badge = document.getElementById('stress-test-badge');
+            const toggle = document.getElementById('stress-toggle');
+            if (stressTestEnabled) {
+                badge.classList.remove('hidden');
+                toggle.innerHTML = '<span>🧪</span> Stress Test Mode: ON';
+                toggle.classList.add('text-amber-600');
+                toggle.classList.remove('text-stone-400');
+                console.log('🧪 Stress Test Mode ENABLED');
+            } else {
+                badge.classList.add('hidden');
+                toggle.innerHTML = '<span>🧪</span> Toggle Stress Test Mode';
+                toggle.classList.remove('text-amber-600');
+                toggle.classList.add('text-stone-400');
+                console.log('🧪 Stress Test Mode DISABLED');
+            }
+        }
+
+        // ─── CAMERA / UPLOAD ──────────────────────────────────────────────
+        async function startCamera() {
+            if (stream) return;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                video.srcObject = stream;
+                video.classList.remove('hidden');
+                preview.classList.add('hidden');
+                isCaptured = false;
+                uploadPrompt.classList.add('hidden');
+                cameraBtn.innerHTML = '<span>📷</span> Close Camera';
+                captureBtn.classList.remove('hidden');
+                document.getElementById('drop-zone').style.borderColor = '#e11d48';
+                document.querySelector('.camera-preview-wrapper').style.minHeight = 'auto';
+            } catch (err) { console.error("Camera access issue:", err); }
+        }
+
+        function stopCameraTracks() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            video.classList.add('hidden');
+            if (!isCaptured) {
+                uploadPrompt.classList.remove('hidden');
+            }
+            cameraBtn.innerHTML = '<span>📷</span> Camera';
+            captureBtn.classList.add('hidden');
+            document.getElementById('drop-zone').style.borderColor = '';
+        }
+
+        dropZone.onclick = () => { if(!stream) fileInput.click(); };
+
+        fileInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+                preview.classList.remove('hidden');
+                uploadPrompt.classList.add('hidden');
+                isCaptured = false;
+                analyzeBtn.classList.remove('hidden');
+                closeResultModal();
+                video.classList.add('hidden');
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                    cameraBtn.innerHTML = '<span>📷</span> Camera';
+                    captureBtn.classList.add('hidden');
+                }
+                document.getElementById('drop-zone').style.borderColor = '';
+            };
+            reader.readAsDataURL(file);
+        };
+
+        cameraBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (stream) { 
+                stopCameraTracks(); 
+            } else { 
+                startCamera(); 
+            }
+        };
+
+        captureBtn.onclick = (e) => {
+            e.stopPropagation();
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            preview.src = canvas.toDataURL('image/png');
+            preview.classList.remove('hidden');
+            video.classList.add('hidden');
+            isCaptured = true;
+            uploadPrompt.classList.add('hidden');
+            captureBtn.classList.add('hidden');
+            analyzeBtn.classList.remove('hidden');
+            closeResultModal();
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            cameraBtn.innerHTML = '<span>📷</span> Camera';
+            document.getElementById('drop-zone').style.borderColor = '';
+        };
+
+        // At the beginning of scan.html, right after the <body> tag or inside DOMContentLoaded
+        (function() {
+            const scannerEnabled = localStorage.getItem('feature_scanner') !== 'false';
+            if (!scannerEnabled) {
+                document.body.innerHTML = `
+                    <div class="max-w-2xl mx-auto p-4 text-center mt-10">
+                        <h2 class="text-2xl font-bold text-stone-700">🔍 Scanner Disabled</h2>
+                        <p class="text-stone-500 mt-2">The scanner has been disabled by the administrator.</p>
+                        <a href="homepage.html" class="inline-block mt-4 text-rose-600 font-bold">← Back to Home</a>
+                    </div>
+                `;
+                return;
+            }
+        })();
+
+        // ─── EXPOSE FUNCTIONS ───────────────────────────────────────────
+        window.toggleNav = toggleNav;
+        window.startCamera = startCamera;
+        window.stopCameraTracks = stopCameraTracks;
+        window.analyzeTextDescription = analyzeTextDescription;
+        window.toggleStressTest = toggleStressTest;
+        window.getFallbackAssessment = getFallbackAssessment;
+        window.closeResultModal = closeResultModal;
+        window.showResultModal = showResultModal;
+        window.fetchFoodNews = fetchFoodNews;
+        window.reportIssue = reportIssue;
+    </script>
+</body>
+</html>

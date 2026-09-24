@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Admin | Dashboard</title>
+    <script src="https://cdn.tailwindcss.com">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+    </script>
+    <style>
+        body {
+            background: #f1f5f9;
+        }
+        .admin-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.25rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            border: 1px solid #e9edf2;
+        }
+        .stat-card {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        .compact-card {
+            padding: 0.8rem 1rem;
+        }
+        .stat-number {
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+        .grid-charts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .chart-container {
+            height: 160px;
+            position: relative;
+            width: 100%;
+            min-width: 0;
+        }
+        @media (max-width: 768px) {
+            .grid-charts {
+                grid-template-columns: 1fr;
+            }
+            .chart-container {
+                height: 200px;
+            }
+        }
+        @media (max-width: 480px) {
+            .chart-container {
+                height: 180px;
+            }
+            .stat-number {
+                font-size: 1.3rem;
+            }
+            .compact-card {
+                padding: 0.6rem 0.7rem;
+            }
+            .admin-card {
+                padding: 0.8rem;
+            }
+        }
+        .badge {
+            padding: 0.15rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .badge-high {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .badge-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .badge-safe {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .truncate-text {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 70px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        @media (min-width: 640px) {
+            .truncate-text {
+                max-width: 120px;
+            }
+        }
+        @media (min-width: 1024px) {
+            .truncate-text {
+                max-width: 180px;
+            }
+        }
+
+        /* Navigation */
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        .hamburger {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #1e293b;
+            padding: 0.25rem 0.5rem;
+        }
+        .nav-link-custom {
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        .nav-link-custom::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #e11d48;
+            transition: width 0.3s ease;
+        }
+        .nav-link-custom:hover::after {
+            width: 100%;
+        }
+        .nav-link-custom.active::after {
+            width: 100%;
+        }
+        @media (max-width: 640px) {
+            .nav-links {
+                display: none;
+                flex-direction: column;
+                gap: 0.5rem;
+                padding: 0.75rem 0;
+                width: 100%;
+                align-items: flex-start;
+            }
+            .nav-links.open {
+                display: flex;
+            }
+            .hamburger {
+                display: block;
+            }
+            .nav-container {
+                flex-wrap: wrap;
+            }
+            .nav-links button {
+                font-size: 0.9rem !important;
+                padding: 0.4rem 0 !important;
+            }
+        }
+
+        /* Users Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            padding: 20px;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            max-width: 650px;
+            width: 100%;
+            padding: 2rem;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.9) translateY(20px);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.active .modal-content {
+            transform: scale(1) translateY(0);
+        }
+        .modal-close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: #f1f5f9;
+            border: none;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #475569;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .modal-close-btn:hover {
+            background: #e2e8f0;
+            color: #1e293b;
+        }
+        .modal-content {
+            position: relative;
+        }
+        .user-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        .user-table th {
+            text-align: left;
+            padding: 0.5rem 0.3rem;
+            border-bottom: 2px solid #e2e8f0;
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+        }
+        .user-table td {
+            padding: 0.4rem 0.3rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .user-table tr:last-child td {
+            border-bottom: none;
+        }
+        .no-users {
+            text-align: center;
+            color: #94a3b8;
+            padding: 1.5rem 0;
+        }
+        .deleted-badge {
+            background: #fee2e2;
+            color: #991b1b;
+            font-size: 0.6rem;
+            padding: 0.1rem 0.4rem;
+            border-radius: 9999px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-stone-50 via-white to-stone-100 min-h-screen font-sans antialiased">
+
+    <!-- ─── NAVIGATION ──────────────────────────────────────────────────── -->
+    <nav class="bg-white/90 backdrop-blur-md border-b border-rose-100/60 p-3 md:p-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-6xl mx-auto flex justify-between items-center nav-container">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🛡️</span>
+                <h1 class="font-black text-xl md:text-2xl text-rose-700 tracking-tight">ChokeSafe · Admin</h1>
+            </div>
+            <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+            <div class="nav-links" id="nav-links">
+                <button onclick="window.location.href='dashboard.html'" class="nav-link-custom text-rose-600 font-medium text-xs md:text-sm active">Dashboard</button>
+                <button onclick="window.location.href='feedback.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Feedback</button>
+                <button onclick="window.location.href='logs.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Scan Logs</button>
+                <button onclick="window.location.href='fooddb.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Food DB</button>
+                <button onclick="window.location.href='settings.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Settings</button>
+                <button onclick="logout()" class="bg-stone-100/70 text-stone-600 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[10px] md:text-xs font-bold hover:bg-rose-100 hover:text-rose-700 transition-colors border border-stone-200/40">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-3 md:p-4 space-y-4">
+        <!-- Stats Row -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div class="stat-card admin-card compact-card" onclick="openUsersModal('all')">
+                <div class="text-xs text-stone-500">Total Scans</div>
+                <div class="stat-number" id="stat-total">0</div>
+            </div>
+            <div class="stat-card admin-card compact-card" onclick="openUsersModal('all')">
+                <div class="text-xs text-stone-500">High Risk</div>
+                <div class="stat-number text-red-600" id="stat-high">0</div>
+            </div>
+            <div class="stat-card admin-card compact-card" onclick="openUsersModal('all')">
+                <div class="text-xs text-stone-500">Medium Risk</div>
+                <div class="stat-number text-amber-600" id="stat-med">0</div>
+            </div>
+            <div class="stat-card admin-card compact-card" onclick="openUsersModal('all')">
+                <div class="text-xs text-stone-500">Safe</div>
+                <div class="stat-number text-emerald-600" id="stat-safe">0</div>
+            </div>
+        </div>
+
+        <!-- User Stats (clickable) -->
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div class="stat-card admin-card compact-card" onclick="openUsersModal('active')">
+                <div class="text-xs text-stone-500">Registered Users</div>
+                <div class="stat-number" id="stat-users">0</div>
+                <div class="text-[10px] text-rose-500 mt-0.5">Click to view list</div>
+            </div>
+            <div class="stat-card admin-card compact-card" onclick="openUsersModal('new')">
+                <div class="text-xs text-stone-500">New (Last 7 Days)</div>
+                <div class="stat-number text-blue-600" id="stat-new-users">0</div>
+                <div class="text-[10px] text-blue-500 mt-0.5">Click to view</div>
+            </div>
+            <div class="stat-card admin-card compact-card" onclick="openUsersModal('deleted')">
+                <div class="text-xs text-stone-500">Deleted Accounts</div>
+                <div class="stat-number text-red-500" id="stat-deleted">0</div>
+                <div class="text-[10px] text-red-500 mt-0.5">Click to view</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid-charts">
+            <div class="admin-card compact-card">
+                <h3 class="text-xs font-semibold text-stone-700 mb-1">Risk Distribution</h3>
+                <div class="chart-container"><canvas id="riskChart"></canvas></div>
+            </div>
+            <div class="admin-card compact-card">
+                <h3 class="text-xs font-semibold text-stone-700 mb-1">Registered vs Guest Scans</h3>
+                <div class="chart-container"><canvas id="userTypeChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Top Foods & Recent Scans -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="admin-card compact-card">
+                <h3 class="text-xs font-semibold text-stone-700 mb-1">Top Foods</h3>
+                <div id="top-foods-list" class="text-sm space-y-0.5"></div>
+            </div>
+            <div class="admin-card compact-card">
+                <h3 class="text-xs font-semibold text-stone-700 mb-1">Recent Scans</h3>
+                <div id="recent-scans" class="text-sm"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ─── USERS MODAL ────────────────────────────────────────────────── -->
+    <div id="users-modal" class="modal-overlay" onclick="if(event.target===this) closeUsersModal()">
+        <div class="modal-content relative">
+            <button class="modal-close-btn" onclick="closeUsersModal()">✕</button>
+            <h3 class="text-xl font-bold text-stone-900 mb-4">👥 User Management</h3>
+
+            <!-- Filter buttons removed as requested -->
+
+            <div class="overflow-x-auto">
+                <table class="user-table" id="users-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Joined</th>
+                            <th>Scans</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                        <tr><td colspan="5" class="no-users">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="no-users-msg" class="hidden no-users">No users match this filter.</div>
+        </div>
+    </div>
+
+    
+    
+ <script src="admin.js"></script>
+<script>
+    // ─── AUTH CHECK ────────────────────────────────────────────────
+    if (!checkAdminAuth()) { /* redirect already done */ }
+
+    // ─── HAMBURGER TOGGLE ──────────────────────────────────────────
+    function toggleNav() { document.getElementById('nav-links').classList.toggle('open'); }
+
+    // ─── DASHBOARD RENDER (Firebase) ──────────────────────────────────
+    let riskChartInstance = null;
+    let userTypeChartInstance = null;
+
+    // ─── HELPER: Deduplicate users by phone (keep most recent) ──────
+    function deduplicateUsers(users) {
+        const map = new Map();
+        users.forEach(user => {
+            const phone = user.phone;
+            if (!phone) return;
+            if (!map.has(phone) || (user.createdAt && user.createdAt.toDate() > map.get(phone).createdAt.toDate())) {
+                map.set(phone, user);
+            }
+        });
+        return Array.from(map.values());
+    }
+
+    // ─── HELPER: Check if food is valid (not unknown) ──────────────
+    function isValidFood(foodName) {
+        if (!foodName) return false;
+        const lower = foodName.toLowerCase().trim();
+        return lower !== 'unknown' && lower !== '' && lower !== 'undefined' && lower !== 'null';
+    }
+
+    async function renderDashboard() {
+        try {
+            // Get all scans
+            const scanSnapshot = await db.collection('scans').get();
+            const allScans = [];
+            scanSnapshot.forEach(doc => allScans.push(doc.data()));
+
+            // ─── FILTER OUT UNKNOWN FOODS ────────────────────────────────
+            const scans = allScans.filter(s => isValidFood(s.foodName));
+
+            // Get all users
+            const userSnapshot = await db.collection('users').get();
+            const users = [];
+            userSnapshot.forEach(doc => users.push({ id: doc.id, ...doc.data() }));
+
+            // Deduplicate users by phone
+            const uniqueUsers = deduplicateUsers(users);
+
+            // Get deleted users
+            const deletedSnapshot = await db.collection('deleted_users').get();
+            const deletedUsers = [];
+            deletedSnapshot.forEach(doc => deletedUsers.push(doc.data()));
+
+            // Scan stats (only from valid foods)
+            const total = scans.length;
+            const high = scans.filter(s => s.riskLevel === 'High').length;
+            const med = scans.filter(s => s.riskLevel === 'Medium').length;
+            const safe = scans.filter(s => s.riskLevel === 'Safe').length;
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-high').textContent = high;
+            document.getElementById('stat-med').textContent = med;
+            document.getElementById('stat-safe').textContent = safe;
+
+            // User stats (using unique users)
+            document.getElementById('stat-users').textContent = uniqueUsers.length;
+            document.getElementById('stat-deleted').textContent = deletedUsers.length;
+
+            // New users (last 7 days) – using unique users
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            const newUsers = uniqueUsers.filter(u => {
+                if (u.createdAt) {
+                    return u.createdAt.toDate() >= sevenDaysAgo;
+                }
+                return false;
+            });
+            document.getElementById('stat-new-users').textContent = newUsers.length;
+
+            // ─── CHARTS ──────────────────────────────────────────────────
+            const ctx = document.getElementById('riskChart').getContext('2d');
+            if (riskChartInstance) {
+                riskChartInstance.destroy();
+                riskChartInstance = null;
+            }
+            riskChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['High', 'Medium', 'Safe'],
+                    datasets: [{ data: [high, med, safe], backgroundColor: ['#ef4444', '#f59e0b', '#22c55e'], borderWidth: 0 }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 6, font: { size: 10 } } } },
+                    cutout: '60%'
+                }
+            });
+
+            const registeredCount = scans.filter(s => s.phone && s.phone !== 'GUEST_USER').length;
+            const guestCount = scans.filter(s => s.phone === 'GUEST_USER' || !s.phone).length;
+            const utCtx = document.getElementById('userTypeChart').getContext('2d');
+            if (userTypeChartInstance) {
+                userTypeChartInstance.destroy();
+                userTypeChartInstance = null;
+            }
+            userTypeChartInstance = new Chart(utCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Registered', 'Guest'],
+                    datasets: [{ data: [registeredCount, guestCount], backgroundColor: ['#3b82f6', '#94a3b8'], borderRadius: 4, barPercentage: 0.5, categoryPercentage: 0.7 }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } } },
+                        x: { ticks: { font: { size: 11, weight: '600' }, maxRotation: 0, autoSkip: false } }
+                    }
+                }
+            });
+
+            // ─── TOP FOODS (only from valid foods) ──────────────────────
+            const foodCount = {};
+            scans.forEach(s => {
+                const category = getFoodCategory(s.foodName || 'Unknown');
+                // Only add if category is valid (not Unknown)
+                if (category !== 'Unknown' && category !== 'unknown') {
+                    foodCount[category] = (foodCount[category] || 0) + 1;
+                }
+            });
+            const sorted = Object.entries(foodCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const listEl = document.getElementById('top-foods-list');
+            listEl.innerHTML = sorted.length === 0 ?
+                '<span class="text-stone-400 text-xs">No valid food scans yet</span>' :
+                sorted.map(([name, count]) =>
+                    `<div class="flex justify-between text-xs py-0.5 border-b border-stone-100/50 last:border-0"><span>${name}</span><span class="font-medium">${count}</span></div>`
+                ).join('');
+
+            // ─── RECENT SCANS (only from valid foods) ────────────────────
+            const recent = scans.slice(-5).reverse();
+            const recentEl = document.getElementById('recent-scans');
+            if (recent.length === 0) {
+                recentEl.innerHTML = '<span class="text-stone-400 text-xs">No recent valid scans</span>';
+            } else {
+                recentEl.innerHTML = await Promise.all(recent.map(async s => {
+                    const userName = await getUserName(s.phone);
+                    const foodName = s.foodName || 'Unknown';
+                    const riskClass = s.riskLevel === 'High' ? 'badge-high' :
+                                      s.riskLevel === 'Medium' ? 'badge-medium' : 'badge-safe';
+                    return `<div class="flex items-center py-0.5 border-b border-stone-100/50 last:border-0 text-xs gap-1">
+                        <span class="truncate flex-1 min-w-0" title="${foodName}">${foodName}</span>
+                        <span class="badge ${riskClass} whitespace-nowrap flex-shrink-0">${s.riskLevel}</span>
+                        <span class="truncate text-stone-400 text-[9px] w-20 flex-shrink-0 text-right" title="${userName}">${userName}</span>
+                    </div>`;
+                })).then(html => html.join(''));
+            }
+
+        } catch (err) {
+            console.error('Dashboard error:', err);
+        }
+    }
+
+    // ─── USERS MODAL (Firebase) ──────────────────────────────────────────
+    let usersCache = [];
+
+    // Open modal with a specific filter: 'all', 'active', 'new', 'deleted'
+    function openUsersModal(filter) {
+        if (!filter) filter = 'all';
+        const modal = document.getElementById('users-modal');
+        modal.classList.add('active');
+        renderFilteredUsers(filter);
+    }
+
+    function closeUsersModal() {
+        document.getElementById('users-modal').classList.remove('active');
+    }
+
+    async function renderFilteredUsers(filter) {
+        try {
+            let users = [];
+            const userSnapshot = await db.collection('users').get();
+            userSnapshot.forEach(doc => {
+                users.push({ id: doc.id, ...doc.data(), status: 'active', isDeleted: false });
+            });
+
+            // Deduplicate users by phone
+            const uniqueUsers = deduplicateUsers(users);
+
+            let deletedUsers = [];
+            const deletedSnapshot = await db.collection('deleted_users').get();
+            deletedSnapshot.forEach(doc => {
+                deletedUsers.push({ id: doc.id, ...doc.data(), status: 'deleted', isDeleted: true });
+            });
+
+            // Deduplicate deleted users too
+            const uniqueDeleted = deduplicateUsers(deletedUsers);
+
+            let filteredUsers = [];
+            if (filter === 'all') {
+                filteredUsers = uniqueUsers.map(u => ({ ...u, status: 'active', isDeleted: false }));
+            } else if (filter === 'new') {
+                const sevenDaysAgo = new Date();
+                sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                filteredUsers = uniqueUsers
+                    .filter(u => {
+                        if (u.createdAt) {
+                            return u.createdAt.toDate() >= sevenDaysAgo;
+                        }
+                        return false;
+                    })
+                    .map(u => ({ ...u, status: 'new', isDeleted: false }));
+            } else if (filter === 'deleted') {
+                filteredUsers = uniqueDeleted.map(u => ({ ...u, status: 'deleted', isDeleted: true }));
+            } else if (filter === 'active') {
+                filteredUsers = uniqueUsers.map(u => ({ ...u, status: 'active', isDeleted: false }));
+            }
+
+            // Get scan counts
+            const scanSnapshot = await db.collection('scans').get();
+            const scans = [];
+            scanSnapshot.forEach(doc => scans.push(doc.data()));
+
+            usersCache = filteredUsers;
+            renderUserTable(filteredUsers, scans);
+
+        } catch (err) {
+            console.error('Error loading users:', err);
+        }
+    }
+
+    function renderUserTable(users, scans) {
+        const tbody = document.getElementById('users-table-body');
+        const noMsg = document.getElementById('no-users-msg');
+
+        if (users.length === 0) {
+            tbody.innerHTML = '';
+            noMsg.classList.remove('hidden');
+            return;
+        }
+        noMsg.classList.add('hidden');
+
+        tbody.innerHTML = users.map(u => {
+            const userScans = scans.filter(s => s.phone === u.phone);
+            const totalScans = userScans.length;
+            const joinDate = u.createdAt ? u.createdAt.toDate().toLocaleDateString() : 'N/A';
+            const statusText = u.isDeleted ? '🗑️ Deleted' : (u.status === 'new' ? '🆕 New' : '✅ Active');
+            const statusColor = u.isDeleted ? 'text-red-500' : (u.status === 'new' ? 'text-blue-500' : 'text-emerald-500');
+            return `<tr>
+                <td class="text-xs font-medium">${u.fullname || 'Unknown'}</td>
+                <td class="text-xs">${u.phone || '-'}</td>
+                <td class="text-xs">${joinDate}</td>
+                <td class="text-xs text-center">${totalScans}</td>
+                <td class="text-xs ${statusColor}">${statusText}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // ─── INIT ────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function() {
+        renderDashboard();
+    });
+
+    window.toggleNav = toggleNav;
+    window.renderDashboard = renderDashboard;
+    window.openUsersModal = openUsersModal;
+    window.closeUsersModal = closeUsersModal;
+</script>
+</body>
+</html>

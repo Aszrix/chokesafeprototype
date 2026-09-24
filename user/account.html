@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>ChokeSafe | Profile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+    <style>
+        .phone-input-group { display: flex; gap: 8px; width: 100%; }
+        .phone-input-group select { flex-shrink: 0; width: auto; min-width: 80px; }
+        .phone-input-group input { flex: 1; min-width: 0; width: 100%; }
+        @media (max-width: 480px) {
+            .phone-input-group { gap: 6px; }
+            .phone-input-group select { min-width: 65px; font-size: 14px; padding: 10px 6px; }
+            .phone-input-group input { font-size: 16px; padding: 10px 12px; }
+        }
+        /* Hamburger menu */
+        .nav-links { display: flex; gap: 1rem; align-items: center; }
+        .hamburger { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #1e293b; padding: 0.25rem 0.5rem; }
+        @media (max-width: 640px) {
+            .nav-links { display: none; flex-direction: column; gap: 0.5rem; padding: 0.75rem 0; width: 100%; align-items: flex-start; }
+            .nav-links.open { display: flex; }
+            .hamburger { display: block; }
+            .nav-container { flex-wrap: wrap; }
+            .nav-links button { font-size: 0.85rem !important; padding: 0.4rem 0 !important; }
+        }
+    </style>
+</head>
+<body class="bg-stone-50 min-h-screen text-stone-800 font-sans">
+
+    <nav class="bg-white border-b border-rose-100 p-3 md:p-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-2xl mx-auto flex justify-between items-center nav-container">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🛡️</span>
+                <h1 class="font-black text-xl md:text-2xl text-rose-700 tracking-tight cursor-pointer hover:text-rose-800 transition-colors" onclick="window.location.href='homepage.html'">ChokeSafe</h1>
+            </div>
+            <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+            <div class="nav-links" id="nav-links">
+                <button onclick="window.location.href='homepage.html'" class="text-stone-500 hover:text-rose-600 font-medium text-xs md:text-sm">Home</button>
+                <button onclick="window.location.href='scan.html'" class="text-stone-500 hover:text-rose-600 font-medium text-xs md:text-sm">Scan</button>
+                 <button onclick="window.location.href='chatbot.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Chat</button>
+            <button onclick="window.location.href='report.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Report</button>
+                <button id="nav-history-btn" onclick="window.location.href='history.html'" class="text-stone-500 hover:text-rose-600 font-medium text-xs md:text-sm hidden">History</button>
+                <button onclick="window.location.href='guide.html'" class="text-stone-500 hover:text-rose-600 font-medium text-xs md:text-sm">Guide</button>
+                <button id="nav-account-btn" onclick="window.location.href='account.html'" class="text-rose-600 font-medium text-xs md:text-sm hidden">Account</button>
+                <button onclick="handleLogout()" class="bg-stone-100 text-stone-600 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[10px] md:text-xs font-bold hover:bg-rose-100 hover:text-rose-700 transition-colors">Sign Out</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-2xl mx-auto p-3 md:p-8 space-y-4 md:space-y-6">
+        <!-- Profile Card -->
+        <div class="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-stone-100 shadow-sm space-y-4 md:space-y-6">
+            <div class="flex items-center gap-3 md:gap-4">
+                <div class="w-12 h-12 md:w-16 md:h-16 bg-red-700 text-white font-black text-lg md:text-xl rounded-2xl flex items-center justify-center shadow-md shadow-red-100" id="avatar-initials">--</div>
+                <div>
+                    <h2 class="text-xl md:text-2xl font-bold text-stone-900" id="prof-name">User</h2>
+                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] md:text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">Registered Account</span>
+                </div>
+            </div>
+
+            <div class="border-t border-stone-100 pt-3 md:pt-4 space-y-2 md:space-y-3">
+                <div class="flex justify-between text-xs md:text-sm"><span class="text-stone-400">Full Name</span><span class="font-medium text-stone-800" id="lbl-name">-</span></div>
+                <div class="flex justify-between text-xs md:text-sm"><span class="text-stone-400">Phone Number</span><span class="font-medium text-stone-800" id="lbl-phone">-</span></div>
+                <div class="flex justify-between text-xs md:text-sm"><span class="text-stone-400">Total Scans Saved</span><span class="font-bold text-stone-900" id="lbl-total">0</span></div>
+            </div>
+        </div>
+
+        <!-- Edit Profile Section -->
+        <div class="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-stone-100 shadow-sm space-y-3 md:space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="text-[10px] md:text-xs font-bold uppercase tracking-wider text-stone-400">Edit Profile</h3>
+                <button onclick="toggleEditMode()" class="text-[10px] md:text-xs font-bold text-rose-600 hover:text-rose-700 transition-colors" id="edit-toggle-btn">✏️ Edit</button>
+            </div>
+            
+            <div id="edit-profile-form" class="hidden space-y-3 md:space-y-4">
+                <div>
+                    <label class="block text-[10px] md:text-xs font-semibold text-stone-500 mb-1">Full Name</label>
+                    <input type="text" id="edit-fullname" class="w-full px-3 md:px-4 py-2 md:py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-rose-400 text-sm" placeholder="Enter your full name">
+                </div>
+                <div>
+                    <label class="block text-[10px] md:text-xs font-semibold text-stone-500 mb-1">Phone Number</label>
+                    <div class="phone-input-group">
+                        <select id="edit-country-code" class="px-2 md:px-3 py-2 md:py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm font-medium text-stone-700 focus:outline-none focus:border-rose-400">
+                            <option value="+65" selected>SG +65</option>
+                            <option value="+60">MY +60</option>
+                        </select>
+                        <input type="text" id="edit-phone" class="flex-1 px-3 md:px-4 py-2 md:py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-rose-400 text-base" placeholder="81234567" maxlength="12" inputmode="numeric">
+                    </div>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="saveProfileChanges()" class="flex-1 bg-rose-600 text-white py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-bold hover:bg-rose-700 transition-colors">Save Changes</button>
+                    <button onclick="cancelEditMode()" class="flex-1 bg-stone-100 text-stone-600 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-bold hover:bg-stone-200 transition-colors">Cancel</button>
+                </div>
+            </div>
+            
+            <div id="edit-success-msg" class="hidden p-2 md:p-3 bg-emerald-50 text-emerald-700 text-xs md:text-sm font-medium rounded-xl border border-emerald-200">
+                ✅ Profile updated successfully!
+            </div>
+        </div>
+
+        <!-- Scan Risk Metrics -->
+        <div class="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-stone-100 shadow-sm space-y-3 md:space-y-4">
+            <h3 class="text-[10px] md:text-xs font-bold uppercase tracking-wider text-stone-400">Scan Risk Metrics</h3>
+            <div class="grid grid-cols-3 gap-2 md:gap-3">
+                <div class="bg-red-50 p-2 md:p-4 rounded-xl text-center border border-red-100">
+                    <div class="text-xl md:text-2xl font-black text-red-700" id="cnt-high">0</div>
+                    <div class="text-[10px] md:text-[11px] font-bold text-red-500 mt-1">High Risk</div>
+                </div>
+                <div class="bg-amber-50 p-2 md:p-4 rounded-xl text-center border border-amber-100">
+                    <div class="text-xl md:text-2xl font-black text-amber-700" id="cnt-med">0</div>
+                    <div class="text-[10px] md:text-[11px] font-bold text-amber-500 mt-1">Medium</div>
+                </div>
+                <div class="bg-emerald-50 p-2 md:p-4 rounded-xl text-center border border-emerald-100">
+                    <div class="text-xl md:text-2xl font-black text-emerald-700" id="cnt-safe">0</div>
+                    <div class="text-[10px] md:text-[11px] font-bold text-emerald-500 mt-1">Safe</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-red-100 shadow-sm space-y-3 md:space-y-4">
+            <h3 class="font-bold text-base md:text-lg text-red-800">Danger Zone</h3>
+            <p class="text-stone-500 text-[10px] md:text-xs">Permanently purge your registration credentials and log sheets.</p>
+            <div id="danger-actions">
+                <button onclick="promptDeleteConfirmation()" class="w-full bg-rose-50 text-rose-700 py-2 md:py-3 rounded-xl font-bold hover:bg-rose-100 transition-colors text-xs md:text-sm border border-rose-200">Delete My Account</button>
+            </div>
+        </div>
+    </main>
+
+    <script src="auth.js"></script>
+<script>
+    // ─── NAV TOGGLE ──────────────────────────────────────────────
+    function toggleNav() { document.getElementById('nav-links').classList.toggle('open'); }
+
+    // ─── INIT PROFILE (Firebase) ──────────────────────────────────
+    async function initPageSpecificUI() {
+        const currentPhone = sessionStorage.getItem("current_session_phone");
+        const currentName = sessionStorage.getItem("current_session_name");
+        if (!currentPhone || currentPhone === "GUEST_USER") return;
+
+        const initials = currentName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
+        document.getElementById('avatar-initials').textContent = initials;
+        document.getElementById('prof-name').textContent = currentName;
+        document.getElementById('lbl-name').textContent = currentName;
+        document.getElementById('lbl-phone').textContent = currentPhone;
+
+        try {
+            const snapshot = await db.collection('scans').where('phone', '==', currentPhone).get();
+            const userScans = [];
+            snapshot.forEach(doc => userScans.push(doc.data()));
+
+            document.getElementById('lbl-total').textContent = userScans.length;
+            document.getElementById('cnt-high').textContent = userScans.filter(s => s.riskLevel === 'High').length;
+            document.getElementById('cnt-med').textContent = userScans.filter(s => s.riskLevel === 'Medium').length;
+            document.getElementById('cnt-safe').textContent = userScans.filter(s => s.riskLevel === 'Safe').length;
+        } catch (err) {
+            console.error('Error loading scans:', err);
+        }
+
+        document.getElementById('edit-fullname').value = currentName;
+        const phoneParts = currentPhone.match(/^(\+65|\+60)(.*)$/);
+        if (phoneParts) {
+            document.getElementById('edit-country-code').value = phoneParts[1];
+            document.getElementById('edit-phone').value = phoneParts[2];
+        } else {
+            document.getElementById('edit-phone').value = currentPhone.replace(/^\+65/, '').replace(/^\+60/, '');
+        }
+    }
+
+    // ─── DELETE ACCOUNT (Firebase) ──────────────────────────────
+    async function executeAccountDeletion() {
+        const currentPhone = sessionStorage.getItem("current_session_phone");
+        if (!confirm('Permanently delete your account and all data?')) return;
+
+        try {
+            const userSnapshot = await db.collection('users').where('phone', '==', currentPhone).get();
+            if (!userSnapshot.empty) {
+                const userDoc = userSnapshot.docs[0];
+                const userData = userDoc.data();
+                await db.collection('deleted_users').add({
+                    fullname: userData.fullname,
+                    phone: userData.phone,
+                    deletedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                await userDoc.ref.delete();
+            }
+
+            const scanSnapshot = await db.collection('scans').where('phone', '==', currentPhone).get();
+            const batch = db.batch();
+            scanSnapshot.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+
+            alert("Account and all data permanently deleted.");
+            sessionStorage.clear();
+            window.location.href = "index.html";
+
+        } catch (err) {
+            alert("Delete failed: " + err.message);
+            console.error(err);
+        }
+    }
+
+    function promptDeleteConfirmation() {
+        document.getElementById('danger-actions').innerHTML = `
+            <div class="space-y-3 mt-2">
+                <p class="text-[10px] md:text-xs text-red-700 font-medium">Are you sure you want to proceed? Your account profile and all history records will be completely deleted.</p>
+                <div class="flex gap-2">
+                    <button onclick="executeAccountDeletion()" class="flex-1 bg-red-700 text-white py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-bold hover:bg-red-800">Yes, Confirm Purge</button>
+                    <button onclick="cancelDeleteSequence()" class="flex-1 bg-stone-100 text-stone-600 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-bold hover:bg-stone-200">Cancel</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function cancelDeleteSequence() {
+        document.getElementById('danger-actions').innerHTML = `<button onclick="promptDeleteConfirmation()" class="w-full bg-rose-50 text-rose-700 py-2 md:py-3 rounded-xl font-bold hover:bg-rose-100 transition-colors text-xs md:text-sm border border-rose-200">Delete My Account</button>`;
+    }
+
+    // ─── SAVE PROFILE CHANGES (Firebase) ──────────────────────────
+    async function saveProfileChanges() {
+        const currentPhone = sessionStorage.getItem("current_session_phone");
+        const newName = document.getElementById('edit-fullname').value.trim();
+        const codeIn = document.getElementById('edit-country-code').value;
+        const phoneRaw = document.getElementById('edit-phone').value.trim();
+
+        if (!newName || !phoneRaw) {
+            alert('Please fill in both name and phone number.');
+            return;
+        }
+
+        const phoneProcessed = phoneRaw.replace(/^0+/, '');
+        const newFullPhone = codeIn + phoneProcessed;
+
+        try {
+            const snapshot = await db.collection('users').where('phone', '==', newFullPhone).get();
+            if (!snapshot.empty) {
+                const existing = snapshot.docs[0].data();
+                if (existing.phone !== currentPhone) {
+                    alert('This phone number is already registered.');
+                    return;
+                }
+            }
+
+            const userSnapshot = await db.collection('users').where('phone', '==', currentPhone).get();
+            if (!userSnapshot.empty) {
+                const userDoc = userSnapshot.docs[0];
+                await userDoc.ref.update({
+                    fullname: newName,
+                    phone: newFullPhone
+                });
+            }
+
+            const scanSnapshot = await db.collection('scans').where('phone', '==', currentPhone).get();
+            const batch = db.batch();
+            scanSnapshot.forEach(doc => {
+                batch.update(doc.ref, { phone: newFullPhone });
+            });
+            await batch.commit();
+
+            sessionStorage.setItem("current_session_phone", newFullPhone);
+            sessionStorage.setItem("current_session_name", newName);
+
+            document.getElementById('edit-success-msg').classList.remove('hidden');
+            const initials = newName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
+            document.getElementById('avatar-initials').textContent = initials;
+            document.getElementById('prof-name').textContent = newName;
+            document.getElementById('lbl-name').textContent = newName;
+            document.getElementById('lbl-phone').textContent = newFullPhone;
+
+            setTimeout(() => {
+                cancelEditMode();
+                initPageSpecificUI();
+            }, 1500);
+
+        } catch (err) {
+            alert('Update failed: ' + err.message);
+            console.error(err);
+        }
+    }
+
+    // ─── EDIT MODE TOGGLE ──────────────────────────────────────────
+    let isEditMode = false;
+    function toggleEditMode() {
+        isEditMode = !isEditMode;
+        const form = document.getElementById('edit-profile-form');
+        const btn = document.getElementById('edit-toggle-btn');
+        const successMsg = document.getElementById('edit-success-msg');
+        successMsg.classList.add('hidden');
+        if (isEditMode) {
+            form.classList.remove('hidden');
+            btn.textContent = '✖️ Close';
+            btn.classList.add('text-rose-600');
+            btn.classList.remove('text-stone-400');
+        } else {
+            form.classList.add('hidden');
+            btn.textContent = '✏️ Edit';
+            btn.classList.remove('text-rose-600');
+            btn.classList.add('text-stone-400');
+        }
+    }
+
+    function cancelEditMode() {
+        isEditMode = false;
+        document.getElementById('edit-profile-form').classList.add('hidden');
+        document.getElementById('edit-toggle-btn').textContent = '✏️ Edit';
+        document.getElementById('edit-toggle-btn').classList.remove('text-rose-600');
+        document.getElementById('edit-toggle-btn').classList.add('text-stone-400');
+        document.getElementById('edit-success-msg').classList.add('hidden');
+        const currentName = sessionStorage.getItem("current_session_name");
+        const currentPhone = sessionStorage.getItem("current_session_phone");
+        document.getElementById('edit-fullname').value = currentName;
+        const phoneParts = currentPhone.match(/^(\+65|\+60)(.*)$/);
+        if (phoneParts) {
+            document.getElementById('edit-country-code').value = phoneParts[1];
+            document.getElementById('edit-phone').value = phoneParts[2];
+        }
+    }
+
+    window.toggleEditMode = toggleEditMode;
+    window.cancelEditMode = cancelEditMode;
+    window.saveProfileChanges = saveProfileChanges;
+    window.toggleNav = toggleNav;
+</script>
+</body>
+</html>

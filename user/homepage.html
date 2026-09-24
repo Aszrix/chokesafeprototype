@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>ChokeSafe | Smart Food Safety</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+    <style>
+        /* ─── ORIGINAL STYLES (kept unchanged) ────────────────────────── */
+        .view { display: none; }
+        .view.active { display: block; }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .spinner { border: 3px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 3px solid white; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .feedback-btn { transition: all 0.2s ease; }
+        .feedback-btn:hover { transform: scale(1.05); }
+        .feedback-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .feedback-modal-content { background: white; max-width: 500px; width: 90%; padding: 24px; border-radius: 24px; max-height: 80vh; overflow-y: auto; }
+        .text-input-area { border: 2px dashed #e5e7eb; border-radius: 16px; padding: 12px; transition: all 0.3s ease; }
+        .text-input-area:focus-within { border-color: #e11d48; background: #fef2f2; }
+        .stress-test-badge { position: fixed; bottom: 20px; right: 20px; background: #1e293b; color: #94a3b8; padding: 8px 16px; border-radius: 9999px; font-size: 10px; font-weight: 600; z-index: 50; cursor: help; }
+        .stress-test-badge:hover { background: #0f172a; color: #e2e8f0; }
+
+        /* Result Modal Styles */
+        .result-modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center; z-index: 999;
+            opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease;
+            padding: 20px;
+        }
+        .result-modal-overlay.active { opacity: 1; visibility: visible; }
+        .result-modal-card {
+            max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;
+            background: white; border-radius: 24px; padding: 32px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            transform: scale(0.9) translateY(20px); transition: transform 0.3s ease;
+        }
+        .result-modal-overlay.active .result-modal-card { transform: scale(1) translateY(0); }
+        .modal-close-btn {
+            position: absolute; top: 16px; right: 16px;
+            background: #f1f5f9; border: none; border-radius: 50%; width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+            color: #475569; cursor: pointer; transition: background 0.2s;
+        }
+        .modal-close-btn:hover { background: #e2e8f0; color: #1e293b; }
+        #results { display: none !important; }
+
+        /* ─── HAMBURGER MENU STYLES ────────────────────────────────────── */
+        .nav-links { display: flex; gap: 1rem; align-items: center; }
+        .hamburger { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #1e293b; padding: 0.25rem 0.5rem; }
+        @media (max-width: 640px) {
+            .nav-links { display: none; flex-direction: column; gap: 0.5rem; padding: 0.75rem 0; width: 100%; align-items: flex-start; }
+            .nav-links.open { display: flex; }
+            .hamburger { display: block; }
+            .nav-container { flex-wrap: wrap; }
+            .nav-links button { font-size: 0.9rem !important; padding: 0.4rem 0 !important; }
+            .home-grid-cards { grid-template-columns: 1fr 1fr !important; }
+        }
+
+        /* ─── NEW UI STYLES ────────────────────────────────────────────── */
+        .hero-gradient {
+            background: linear-gradient(135deg, #be123c 0%, #881337 50%, #4c0519 100%);
+        }
+        .feature-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px rgba(190, 18, 60, 0.12);
+        }
+        .pulse-ring {
+            animation: pulseRing 2s infinite;
+        }
+        @keyframes pulseRing {
+            0% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(225, 29, 72, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); }
+        }
+        .nav-link-custom {
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        .nav-link-custom::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #e11d48;
+            transition: width 0.3s ease;
+        }
+        .nav-link-custom:hover::after {
+            width: 100%;
+        }
+        .nav-link-custom.active::after {
+            width: 100%;
+        }
+        .welcome-badge {
+            background: linear-gradient(135deg, #fce7f3, #fbcfe8);
+        }
+        .guest-badge {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            color: #92400e;
+            font-size: 10px;
+            padding: 2px 12px;
+            border-radius: 9999px;
+            font-weight: 600;
+        }
+        .home-grid-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+        @media (min-width: 640px) {
+            .home-grid-cards { grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-stone-50 via-white to-stone-100 min-h-screen text-stone-800 font-sans antialiased">
+
+    <!-- Stress Test Badge -->
+    <div id="stress-test-badge" class="stress-test-badge hidden" title="Stress Test Mode Active - Testing edge cases">
+        🧪 Stress Test Mode
+    </div>
+
+    <!-- ─── NAVIGATION WITH HAMBURGER MENU ─────────────────────────────── -->
+    <nav class="bg-white/90 backdrop-blur-md border-b border-rose-100/60 p-3 md:p-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-2xl mx-auto flex justify-between items-center nav-container">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🛡️</span>
+                <h1 class="font-black text-xl md:text-2xl text-rose-700 tracking-tight cursor-pointer hover:text-rose-800 transition-colors" onclick="window.location.href='homepage.html'">ChokeSafe</h1>
+            </div>
+            <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+            <div class="nav-links" id="nav-links">
+                <button onclick="window.location.href='homepage.html'" class="nav-link-custom text-rose-600 font-medium text-xs md:text-sm active">Home</button>
+                <button onclick="window.location.href='scan.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Scan</button>
+                 <button onclick="window.location.href='chatbot.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Chat</button>
+            <button onclick="window.location.href='report.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Report</button>
+                <button id="nav-history-btn" onclick="window.location.href='history.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm hidden">History</button>
+                <button onclick="window.location.href='guide.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Guide</button>
+                <button id="nav-account-btn" onclick="window.location.href='account.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm hidden">Account</button>
+                <button onclick="handleLogout()" class="bg-stone-100/70 text-stone-600 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[10px] md:text-xs font-bold hover:bg-rose-100 hover:text-rose-700 transition-colors border border-stone-200/40">Sign Out</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-2xl mx-auto p-3 md:p-4">
+
+        <!-- ─── HOME VIEW ────────────────────────────────────────────────── -->
+        <div id="home" class="view active fade-in space-y-4 md:space-y-5">
+            
+            <!-- Welcome Card -->
+            <div class="welcome-badge p-3 md:p-4 rounded-2xl flex justify-between items-center shadow-sm border border-rose-100/30">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl" id="welcome-emoji">👋</span>
+                    <span class="text-xs md:text-sm font-medium text-stone-700" id="welcome-message">Loading session...</span>
+                    <span id="guest-badge" class="guest-badge hidden">Guest</span>
+                </div>
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 pulse-ring" id="user-status-dot"></span>
+            </div>
+
+            <!-- Hero Section -->
+            <div class="hero-gradient rounded-2xl md:rounded-3xl p-6 md:p-10 text-center text-white shadow-xl relative overflow-hidden">
+                <div class="absolute -right-16 md:-right-20 -bottom-16 md:-bottom-20 w-48 md:w-64 h-48 md:h-64 bg-rose-600/20 rounded-full blur-3xl"></div>
+                <div class="absolute -left-16 md:-left-20 -top-16 md:-top-20 w-36 md:w-48 h-36 md:h-48 bg-rose-500/10 rounded-full blur-2xl"></div>
+                <div class="relative z-10">
+                    <div class="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm px-3 py-1 rounded-full mb-4">
+                        <span class="text-xs uppercase tracking-widest font-bold opacity-90">RBI Compliant</span>
+                    </div>
+                    <h2 class="text-2xl md:text-3xl font-extrabold mb-2 tracking-tight">Protect Every Bite</h2>
+                    <p class="text-rose-100/90 text-sm md:text-base max-w-md mx-auto leading-relaxed">AI-powered detection for pediatric choking hazards. Based on RBI L2P4011 compliance frameworks.</p>
+                    <button onclick="window.location.href='scan.html'" class="mt-5 md:mt-6 px-6 md:px-8 py-2.5 md:py-3 bg-white text-rose-800 rounded-full font-bold shadow-lg hover:bg-rose-50 transition-all transform hover:scale-105 inline-flex items-center gap-2 text-sm pulse-ring">
+                        <span>📷</span> Launch Scanner
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Actions Grid -->
+            <div class="home-grid-cards">
+                <div onclick="window.location.href='scan.html'" class="feature-card bg-white p-4 md:p-5 rounded-2xl border border-stone-100/80 shadow-sm cursor-pointer text-center hover:border-rose-200 hover:shadow-md">
+                    <div class="w-10 h-10 md:w-12 md:h-12 bg-rose-50 text-rose-600 flex items-center justify-center rounded-xl mx-auto mb-2 text-xl md:text-2xl">🔍</div>
+                    <h3 class="font-bold text-stone-800 text-xs md:text-sm">Scan Food</h3>
+                    <p class="text-stone-400 text-[10px] md:text-xs leading-relaxed mt-0.5">Upload or capture</p>
+                </div>
+                <div onclick="window.location.href='guide.html'" class="feature-card bg-white p-4 md:p-5 rounded-2xl border border-stone-100/80 shadow-sm cursor-pointer text-center hover:border-rose-200 hover:shadow-md">
+                    <div class="w-10 h-10 md:w-12 md:h-12 bg-emerald-50 text-emerald-600 flex items-center justify-center rounded-xl mx-auto mb-2 text-xl md:text-2xl">📖</div>
+                    <h3 class="font-bold text-stone-800 text-xs md:text-sm">Safety Guide</h3>
+                    <p class="text-stone-400 text-[10px] md:text-xs leading-relaxed mt-0.5">L2P4011 reference</p>
+                </div>
+                <div onclick="openArticlesModal()" class="feature-card bg-white p-4 md:p-5 rounded-2xl border border-stone-100/80 shadow-sm cursor-pointer text-center hover:border-rose-200 hover:shadow-md">
+                    <div class="w-10 h-10 md:w-12 md:h-12 bg-amber-50 text-amber-600 flex items-center justify-center rounded-xl mx-auto mb-2 text-xl md:text-2xl">📰</div>
+                    <h3 class="font-bold text-stone-800 text-xs md:text-sm">Articles</h3>
+                    <p class="text-stone-400 text-[10px] md:text-xs leading-relaxed mt-0.5">Choking safety news</p>
+                </div>
+            </div>
+
+            <!-- Help & Report Issue -->
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="window.location.href='chatbot.html'" class="flex items-center justify-center gap-2 p-3 md:p-4 bg-rose-50 border border-rose-200 rounded-2xl hover:bg-rose-100 transition-all feature-card">
+                    <span class="text-xl">💬</span>
+                    <div class="text-left">
+                        <p class="text-xs font-bold text-rose-700">Get Help</p>
+                        <p class="text-[10px] text-stone-500">Chat with support</p>
+                    </div>
+                </button>
+                <button onclick="window.location.href='report.html'" class="flex items-center justify-center gap-2 p-3 md:p-4 bg-amber-50 border border-amber-200 rounded-2xl hover:bg-amber-100 transition-all feature-card">
+                    <span class="text-xl">📝</span>
+                    <div class="text-left">
+                        <p class="text-xs font-bold text-amber-700">Report Issue</p>
+                        <p class="text-[10px] text-stone-500">Help us improve</p>
+                    </div>
+                </button>
+            </div>
+
+            <!-- Guest Warning -->
+            <div id="guest-warning" class="hidden bg-amber-50/80 border border-amber-200/60 rounded-2xl p-3 md:p-4 flex items-start gap-3 backdrop-blur-sm">
+                <span class="text-amber-500 text-lg">⚠️</span>
+                <div>
+                    <p class="text-sm font-medium text-amber-800">You're browsing as a guest</p>
+                    <p class="text-xs text-amber-700/80 mt-0.5">Sign in to save your scan history and access your account.</p>
+                    <button onclick="window.location.href='index.html'" class="mt-2 text-xs font-bold text-amber-700 bg-amber-200/60 px-4 py-1.5 rounded-lg hover:bg-amber-200 transition-colors">
+                        Sign In or Register
+                    </button>
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="flex flex-col gap-2">
+                <button onclick="toggleStressTest()" class="w-full text-stone-400 hover:text-amber-600 text-xs font-medium transition-colors flex items-center justify-center gap-2 py-2.5 border border-dashed border-stone-200 rounded-xl hover:border-amber-300 bg-white/50 backdrop-blur-sm" id="stress-toggle">
+                    <span>🧪</span> Toggle Stress Test Mode
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ─── ARTICLES MODAL ────────────────────────────────────────────── -->
+    <div id="articles-modal" class="feedback-modal hidden" onclick="if(event.target===this) closeArticlesModal()">
+        <div class="feedback-modal-content max-w-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-stone-900 flex items-center gap-2">
+                    <span>📰</span> Food Choking Safety Articles
+                </h3>
+                <button onclick="closeArticlesModal()" class="text-stone-400 hover:text-stone-600 text-xl">&times;</button>
+            </div>
+            <p class="text-sm text-stone-600 mb-4">Stay informed with the latest articles on food choking hazards and safety tips.</p>
+            <div id="articles-list" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                <div class="text-center text-stone-400 text-sm py-8">Loading articles...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script>
+        // ─── HAMBURGER TOGGLE ──────────────────────────────────────────────
+        function toggleNav() {
+            document.getElementById('nav-links').classList.toggle('open');
+        }
+
+        // ─── ARTICLES DATA ──────────────────────────────────────────────────
+        const articlesData = [
+            { title: 'Top 10 Choking Hazards for Children Under 4', source: 'HealthyChildren.org', url: 'https://www.healthychildren.org/English/health-issues/injuries-emergencies/Pages/Choking-Prevention.aspx', date: '2024' },
+            { title: 'How to Prepare Food to Prevent Choking', source: 'CDC', url: 'https://www.cdc.gov/nutrition/InfantandToddlerNutrition/foods-and-drinks/choking-hazards.html', date: '2024' },
+            { title: 'Grapes: The Hidden Choking Danger', source: 'BBC News', url: 'https://www.bbc.com/news/health-48770221', date: '2023' },
+            { title: 'Hot Dog Choking Prevention Tips', source: 'Nationwide Children\'s', url: 'https://www.nationwidechildrens.org/family-resources-education/health-wellness-and-safety-resources/helping-hands/choking-hazards', date: '2024' },
+            { title: 'Infant and Toddler Feeding Safety', source: 'WHO', url: 'https://www.who.int/news-room/fact-sheets/detail/infant-and-young-child-feeding', date: '2023' },
+            { title: 'What to Do If Someone Is Choking', source: 'Red Cross', url: 'https://www.redcross.org.uk/first-aid/learn-first-aid-for-babies-and-children/choking', date: '2024' },
+        ];
+
+        function openArticlesModal() {
+            const modal = document.getElementById('articles-modal');
+            modal.classList.remove('hidden');
+            const list = document.getElementById('articles-list');
+            list.innerHTML = articlesData.map(article => `
+                <div class="article-card p-4 bg-white border border-stone-200 rounded-xl hover:shadow-sm">
+                    <a href="${article.url}" target="_blank" rel="noopener noreferrer" class="block">
+                        <h4 class="font-bold text-stone-800 text-sm hover:text-rose-600 transition-colors">${article.title}</h4>
+                        <div class="flex justify-between text-xs text-stone-400 mt-1">
+                            <span>${article.source}</span>
+                            <span>${article.date}</span>
+                        </div>
+                    </a>
+                </div>
+            `).join('');
+        }
+
+        function closeArticlesModal() {
+            document.getElementById('articles-modal').classList.add('hidden');
+        }
+
+        // ─── STRESS TEST MODE ─────────────────────────────────────────────
+        let stressTestEnabled = false;
+        function toggleStressTest() {
+            stressTestEnabled = !stressTestEnabled;
+            const badge = document.getElementById('stress-test-badge');
+            const toggle = document.getElementById('stress-toggle');
+            if (stressTestEnabled) {
+                badge.classList.remove('hidden');
+                toggle.innerHTML = '<span>🧪</span> Stress Test Mode: ON';
+                toggle.classList.add('text-amber-600');
+                toggle.classList.remove('text-stone-400');
+                console.log('🧪 Stress Test Mode ENABLED');
+            } else {
+                badge.classList.add('hidden');
+                toggle.innerHTML = '<span>🧪</span> Toggle Stress Test Mode';
+                toggle.classList.remove('text-amber-600');
+                toggle.classList.add('text-stone-400');
+                console.log('🧪 Stress Test Mode DISABLED');
+            }
+        }
+
+        function applyFeatureToggles() {
+    const chatbotEnabled = localStorage.getItem('feature_chatbot') !== 'false';
+    const scannerEnabled = localStorage.getItem('feature_scanner') !== 'false';
+    const guestEnabled = localStorage.getItem('feature_guest') !== 'false';
+
+    // Chat button in nav (if exists)
+    const chatNavBtn = document.querySelector('#nav-links button[onclick*="chatbot.html"]');
+    if (chatNavBtn) {
+        chatNavBtn.style.display = chatbotEnabled ? '' : 'none';
+    }
+
+    // Scan quick action card
+    const scanCard = document.querySelector('.home-grid-cards .feature-card:first-child');
+    if (scanCard) {
+        scanCard.style.display = scannerEnabled ? '' : 'none';
+    }
+
+    // Guest warning – show only if user is guest AND guest access is enabled
+    const guestWarning = document.getElementById('guest-warning');
+    if (guestWarning) {
+        const isGuest = sessionStorage.getItem('session_is_guest') === 'true';
+        if (isGuest && guestEnabled) {
+            guestWarning.classList.remove('hidden');
+        } else {
+            guestWarning.classList.add('hidden');
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    applyFeatureToggles();
+    // ... other init
+});
+
+        // ─── EXPOSE FUNCTIONS ───────────────────────────────────────────
+        window.toggleNav = toggleNav;
+        window.openArticlesModal = openArticlesModal;
+        window.closeArticlesModal = closeArticlesModal;
+        window.toggleStressTest = toggleStressTest;
+    </script>
+</body>
+</html>

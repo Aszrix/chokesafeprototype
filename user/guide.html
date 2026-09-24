@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>ChokeSafe | Safety Guidelines</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+    <style>
+        table { border-collapse: collapse; width: 100%; margin-top: 1rem; margin-bottom: 1.5rem; }
+        th, td { padding: 10px; border: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+        th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        td { font-size: 0.8rem; line-height: 1.4; }
+        .nav-links { display: flex; gap: 1rem; align-items: center; }
+        .hamburger { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #1e293b; padding: 0.25rem 0.5rem; }
+        @media (max-width: 640px) {
+            .nav-links { display: none; flex-direction: column; gap: 0.5rem; padding: 0.75rem 0; width: 100%; align-items: flex-start; }
+            .nav-links.open { display: flex; }
+            .hamburger { display: block; }
+            .nav-container { flex-wrap: wrap; }
+            .nav-links button { font-size: 0.85rem !important; padding: 0.4rem 0 !important; }
+            .container-padding { padding-left: 12px; padding-right: 12px; }
+            th, td { padding: 6px; font-size: 0.7rem; }
+        }
+    </style>
+</head>
+<body class="bg-stone-50 min-h-screen text-stone-800 font-sans">
+
+    <nav class="bg-white border-b border-rose-100 p-3 md:p-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-2xl mx-auto flex justify-between items-center nav-container">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🛡️</span>
+                <h1 class="font-black text-xl md:text-2xl text-rose-700 tracking-tight cursor-pointer hover:text-rose-800 transition-colors" onclick="window.location.href='homepage.html'">ChokeSafe</h1>
+            </div>
+            <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+            <div class="nav-links" id="nav-links">
+                <button onclick="window.location.href='homepage.html'" class="text-stone-500 hover:text-rose-600 font-medium text-xs md:text-sm">Home</button>
+                <button onclick="window.location.href='scan.html'" class="text-stone-500 hover:text-rose-600 font-medium text-xs md:text-sm">Scan</button>
+                 <button onclick="window.location.href='chatbot.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Chat</button>
+            <button onclick="window.location.href='report.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Report</button>
+                <button id="nav-history-btn" onclick="window.location.href='history.html'" class="text-stone-500 hover:text-rose-600 font-medium text-xs md:text-sm hidden">History</button>
+                <button onclick="window.location.href='guide.html'" class="text-rose-600 font-medium text-xs md:text-sm">Guide</button>
+                <button id="nav-account-btn" onclick="window.location.href='account.html'" class="text-stone-500 hover:text-rose-600 font-medium text-xs md:text-sm hidden">Account</button>
+                <button onclick="handleLogout()" class="bg-stone-100 text-stone-600 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[10px] md:text-xs font-bold hover:bg-rose-100 hover:text-rose-700 transition-colors">Sign Out</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-2xl mx-auto p-3 md:p-8 space-y-6">
+        <div class="bg-white p-4 md:p-8 rounded-2xl md:rounded-3xl shadow-sm border border-rose-100 space-y-4 md:space-y-6">
+            <div>
+                <h2 class="text-2xl md:text-3xl font-black tracking-tight text-stone-900">Pediatric Food Safety Guide</h2>
+                <p class="text-stone-500 text-xs md:text-sm mt-1">Based on the L2P4011 Physical Risk Assessment frameworks.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                <div class="p-4 bg-red-50 rounded-2xl border-l-4 border-red-500">
+                    <h3 class="font-bold text-red-900 text-xs uppercase tracking-wide">High Risk Geometric Limits</h3>
+                    <p class="text-[11px] text-red-800 mt-1 leading-relaxed">Objects with rigid, non-compressible spherical or oval profiles measuring between <strong>1.6cm and 4.3cm</strong> fall directly inside dangerous airway-blocking parameters.</p>
+                </div>
+                <div class="p-4 bg-amber-50 rounded-2xl border-l-4 border-amber-500">
+                    <h3 class="font-bold text-amber-900 text-xs uppercase tracking-wide">Hazard Intrinsic Qualities</h3>
+                    <p class="text-[11px] text-amber-800 mt-1 leading-relaxed">Risk parameters exponentially increase when a food combines structural firmness with a slippery surface, or has a texture that swells when exposed to moisture.</p>
+                </div>
+            </div>
+
+            <div class="pt-2">
+                <h3 class="font-black text-base md:text-lg text-stone-900 border-b border-stone-100 pb-1 md:pb-2 mb-3">Risk Classification Framework</h3>
+                
+                <div class="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                    <table class="border border-red-200 min-w-[500px]">
+                        <thead><tr class="bg-red-950 text-white"><th class="w-1/4">High Risk Food</th><th class="w-2/5">Hazard Attributes</th><th class="w-1/3">Mandatory Modifications</th></tr></thead>
+                        <tbody class="divide-y divide-red-100 bg-red-50/20">
+                            <tr><td class="font-bold text-red-900 text-xs">Whole Grapes, Cherry Tomatoes</td><td class="text-xs">Spherical or oval geometries perfectly match airway sizes; slippery outer skins.</td><td class="text-xs text-red-800 font-medium">Must be quartered lengthwise. Never serve whole.</td></tr>
+                            <tr><td class="font-bold text-red-900 text-xs">Hot Dogs, Sausages</td><td class="text-xs">Cylindrical shape. When cut into round discs, they form an airtight seal.</td><td class="text-xs text-red-800 font-medium">Slice lengthwise into semi-cylinders, then into small fragments.</td></tr>
+                            <tr><td class="font-bold text-red-900 text-xs">Hard Candies, Cough Drops</td><td class="text-xs">Unyielding and firm. Resists compression and does not dissolve quickly.</td><td class="text-xs text-red-800 font-medium">Strictly avoid for children under 4. Grind nuts into powders.</td></tr>
+                            <tr><td class="font-bold text-red-900 text-xs">Marshmallows, Caramels</td><td class="text-xs">Pliable and sticky. Expands and molds to fill the airway.</td><td class="text-xs text-red-800 font-medium">Do not serve whole. Melt or chop into tiny shards <0.5cm.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 mt-4">
+                    <table class="border border-amber-200 min-w-[500px]">
+                        <thead><tr class="bg-amber-900 text-white"><th class="w-1/4">Medium Risk Food</th><th class="w-2/5">Hazard Attributes</th><th class="w-1/3">Mitigation Protocols</th></tr></thead>
+                        <tbody class="divide-y divide-amber-100 bg-amber-50/20">
+                            <tr><td class="font-bold text-amber-900 text-xs">Raw Carrots, Apples</td><td class="text-xs">Firm, hard, crisp. Breaks into sharp chunks that can wedge.</td><td class="text-xs text-amber-800 font-medium">Steam, boil, or cook until soft. Or grate into thin shreds.</td></tr>
+                            <tr><td class="font-bold text-amber-900 text-xs">Tough Meat & Poultry</td><td class="text-xs">Fibrous, dense, difficult to chew. Often swallowed whole.</td><td class="text-xs text-amber-800 font-medium">Mince finely or shred along grain lines into tiny pieces <0.5cm.</td></tr>
+                            <tr><td class="font-bold text-amber-900 text-xs">Dried Fruits</td><td class="text-xs">Leathery, tough, cohesive. Swells and becomes stickier.</td><td class="text-xs text-amber-800 font-medium">Chop finely or rehydrate in warm water until soft.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 mt-4">
+                    <table class="border border-emerald-200 min-w-[500px]">
+                        <thead><tr class="bg-emerald-900 text-white"><th class="w-1/4">Safe / Low Risk Food</th><th class="w-2/5">Hazard Attributes</th><th class="w-1/3">Preparation Status</th></tr></thead>
+                        <tbody class="divide-y divide-emerald-100 bg-emerald-50/20">
+                            <tr><td class="font-bold text-emerald-900 text-xs">Purees, Yogurts</td><td class="text-xs">Fluid or blended. Bypasses airways smoothly.</td><td class="text-xs text-emerald-800 font-medium">Ready to serve. Ensure no solid chunks.</td></tr>
+                            <tr><td class="font-bold text-emerald-900 text-xs">Soft Bananas, Avocados</td><td class="text-xs">Soft, yielding, easy to smash with tongue pressure.</td><td class="text-xs text-emerald-800 font-medium">Cut into finger-food lengths or mash with a fork.</td></tr>
+                            <tr><td class="font-bold text-emerald-900 text-xs">Dissolving Rice Melts</td><td class="text-xs">Dissolves rapidly on contact with saliva.</td><td class="text-xs text-emerald-800 font-medium">Ready to serve. Keep in airtight packaging.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script src="auth.js"></script>
+    <script>
+        function toggleNav() { document.getElementById('nav-links').classList.toggle('open'); }
+        window.toggleNav = toggleNav;
+    </script>
+</body>
+</html>

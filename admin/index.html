@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Admin Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 30%, #fecdd3 70%, #fda4af 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        .login-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border-radius: 2rem;
+            padding: 2.5rem 2rem;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.2);
+            transition: transform 0.2s ease;
+        }
+        .login-card:hover {
+            transform: translateY(-2px);
+        }
+        .logo-icon {
+            background: linear-gradient(135deg, #e11d48, #be123c);
+            width: 4.5rem;
+            height: 4.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            box-shadow: 0 8px 24px rgba(225, 29, 72, 0.25);
+        }
+        .logo-icon span {
+            font-size: 2.5rem;
+        }
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 1rem;
+            font-size: 0.95rem;
+            background: rgba(255, 255, 255, 0.8);
+            transition: all 0.2s;
+            outline: none;
+        }
+        .form-input:focus {
+            border-color: #e11d48;
+            box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.1);
+            background: white;
+        }
+        .form-input::placeholder {
+            color: #9ca3af;
+            font-weight: 300;
+        }
+        .btn-login {
+            background: linear-gradient(135deg, #e11d48, #be123c);
+            color: white;
+            font-weight: 600;
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 1rem;
+            font-size: 1rem;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3);
+        }
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(225, 29, 72, 0.4);
+        }
+        .btn-login:active {
+            transform: translateY(0);
+        }
+        .error-msg {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            border: 1px solid #fecaca;
+        }
+        .error-msg.hidden {
+            display: none;
+        }
+        .forgot-link {
+            text-align: right;
+            margin-top: 0.25rem;
+        }
+        .forgot-link a {
+            font-size: 0.8rem;
+            color: #64748b;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .forgot-link a:hover {
+            color: #e11d48;
+            text-decoration: underline;
+        }
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 1.5rem 1.25rem;
+                border-radius: 1.5rem;
+            }
+            .logo-icon {
+                width: 3.5rem;
+                height: 3.5rem;
+            }
+            .logo-icon span {
+                font-size: 2rem;
+            }
+            .form-input {
+                font-size: 1rem;
+                padding: 0.7rem 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-card">
+        <!-- Icon -->
+        <div class="logo-icon">
+            <span>🛡️</span>
+        </div>
+
+        <h1 class="text-2xl font-black text-center text-rose-700 tracking-tight">ChokeSafe</h1>
+        <p class="text-center text-stone-500 text-sm mt-1 mb-6">Admin Access</p>
+
+        <!-- Login Form -->
+        <form onsubmit="event.preventDefault(); login();" autocomplete="off">
+            <div class="mb-3">
+                <label for="admin-username" class="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Admin ID</label>
+                <input type="text" id="admin-username" class="form-input" placeholder="Enter admin ID" value="admin">
+            </div>
+
+            <div class="mb-3">
+                <label for="admin-password" class="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">Password</label>
+                <input type="password" id="admin-password" class="form-input" placeholder="Enter password" onkeydown="if(event.key==='Enter') login()">
+            </div>
+
+            <div class="forgot-link">
+                <a href="forgot-password.html">Forgot password?</a>
+            </div>
+
+            <button type="submit" class="btn-login mt-2">
+                <span class="flex items-center justify-center gap-2">🔓 Unlock</span>
+            </button>
+
+            <div id="login-error" class="error-msg hidden">
+                <span>⚠️</span> Invalid admin ID or password.
+            </div>
+        </form>
+
+        
+    </div>
+
+    <script src="admin.js"></script>
+    <script>
+        // ─── Login function — checks the 'admins' Firestore collection ──
+        window.login = async function() {
+            const username = document.getElementById('admin-username').value.trim();
+            const password = document.getElementById('admin-password').value.trim();
+            const errorEl = document.getElementById('login-error');
+            errorEl.classList.add('hidden');
+
+            if (!username || !password) {
+                errorEl.textContent = '⚠️ Please enter admin ID and password.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const snapshot = await db.collection('admins').where('id', '==', username).get();
+
+                if (snapshot.empty) {
+                    errorEl.textContent = '⚠️ Invalid admin ID or password.';
+                    errorEl.classList.remove('hidden');
+                    document.getElementById('admin-password').value = '';
+                    document.getElementById('admin-password').focus();
+                    return;
+                }
+
+                const adminDoc = snapshot.docs[0].data();
+                if (adminDoc.password !== password) {
+                    errorEl.textContent = '⚠️ Invalid admin ID or password.';
+                    errorEl.classList.remove('hidden');
+                    document.getElementById('admin-password').value = '';
+                    document.getElementById('admin-password').focus();
+                    return;
+                }
+
+                sessionStorage.setItem('admin_logged_in', 'true');
+                sessionStorage.setItem('admin_id', username);
+                window.location.href = 'dashboard.html';
+
+            } catch (err) {
+                errorEl.textContent = '⚠️ Login failed: ' + err.message;
+                errorEl.classList.remove('hidden');
+                console.error(err);
+            }
+        };
+
+        // ─── Remove error on typing ─────────────────────────────────────
+        document.getElementById('admin-password').addEventListener('input', function() {
+            document.getElementById('login-error').classList.add('hidden');
+        });
+        document.getElementById('admin-username').addEventListener('input', function() {
+            document.getElementById('login-error').classList.add('hidden');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Admin | Feedback</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+    <style>
+        body { background: #f1f5f9; }
+        .admin-card { background: white; border-radius: 16px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e9edf2; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th { text-align: left; padding: 0.5rem 0.4rem; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #1e293b; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; }
+        td { padding: 0.4rem 0.4rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; font-size: 0.8rem; }
+        .badge { padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.65rem; font-weight: 600; }
+        .badge-pending { background: #fef3c7; color: #92400e; }
+        .badge-reviewed { background: #d1fae5; color: #065f46; }
+        .badge-followup { background: #dbeafe; color: #1e40af; }
+        .btn-edit { color: #3b82f6; cursor: pointer; font-size: 0.75rem; }
+        .btn-edit:hover { text-decoration: underline; }
+        .btn-delete { color: #ef4444; cursor: pointer; font-size: 0.75rem; }
+        .btn-delete:hover { text-decoration: underline; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+        .empty-state { text-align: center; padding: 1.5rem 1rem; color: #94a3b8; font-size: 0.9rem; }
+        .compact-card { padding: 0.8rem 1rem; }
+        .feedback-row { cursor: pointer; transition: background 0.15s; }
+        .feedback-row:hover { background: #f1f5f9; }
+        .feedback-row td:first-child { padding-left: 0.8rem; }
+
+        .nav-links { display: flex; gap: 1rem; align-items: center; }
+        .hamburger { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #1e293b; padding: 0.25rem 0.5rem; }
+        .nav-link-custom { position: relative; transition: all 0.2s ease; }
+        .nav-link-custom::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 2px; background: #e11d48; transition: width 0.3s ease; }
+        .nav-link-custom:hover::after { width: 100%; }
+        .nav-link-custom.active::after { width: 100%; }
+        @media (max-width: 640px) {
+            .nav-links { display: none; flex-direction: column; gap: 0.5rem; padding: 0.75rem 0; width: 100%; align-items: flex-start; }
+            .nav-links.open { display: flex; }
+            .hamburger { display: block; }
+            .nav-container { flex-wrap: wrap; }
+            .nav-links button { font-size: 0.9rem !important; padding: 0.4rem 0 !important; }
+            th, td { font-size: 0.65rem; padding: 0.3rem 0.2rem; }
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            padding: 20px;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            max-width: 600px;
+            width: 100%;
+            padding: 2rem;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.9) translateY(20px);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.active .modal-content {
+            transform: scale(1) translateY(0);
+        }
+        .modal-close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: #f1f5f9;
+            border: none;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #475569;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .modal-close-btn:hover { background: #e2e8f0; color: #1e293b; }
+        .modal-content { position: relative; }
+        .detail-label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; }
+        .detail-value { font-size: 0.9rem; color: #1e293b; word-wrap: break-word; }
+        .detail-row { padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9; }
+
+        .notification-badge {
+            background: #ef4444;
+            color: white;
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 0.1rem 0.45rem;
+            border-radius: 9999px;
+            margin-left: 0.3rem;
+            display: inline-block;
+            line-height: 1.4;
+            min-width: 18px;
+            text-align: center;
+        }
+        .notification-badge.hidden { display: none; }
+
+        .filter-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+        .filter-bar select, .filter-bar input { padding: 0.35rem 0.7rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 0.8rem; background: white; }
+        .filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: #e11d48; box-shadow: 0 0 0 3px rgba(225,29,72,0.1); }
+        .filter-bar .filter-label { font-size: 0.7rem; font-weight: 600; color: #64748b; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-stone-50 via-white to-stone-100 min-h-screen font-sans antialiased">
+
+    <nav class="bg-white/90 backdrop-blur-md border-b border-rose-100/60 p-3 md:p-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-6xl mx-auto flex justify-between items-center nav-container">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🛡️</span>
+                <h1 class="font-black text-xl md:text-2xl text-rose-700 tracking-tight">ChokeSafe · Admin</h1>
+            </div>
+            <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+            <div class="nav-links" id="nav-links">
+                <button onclick="window.location.href='dashboard.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Dashboard</button>
+                <button onclick="window.location.href='feedback.html'" class="nav-link-custom text-rose-600 font-medium text-xs md:text-sm active">Feedback <span id="feedback-notification-badge" class="notification-badge hidden">0</span></button>
+                <button onclick="window.location.href='logs.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Scan Logs</button>
+                <button onclick="window.location.href='fooddb.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Food DB</button>
+                <button onclick="window.location.href='settings.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Settings</button>
+                <button onclick="logout()" class="bg-stone-100/70 text-stone-600 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[10px] md:text-xs font-bold hover:bg-rose-100 hover:text-rose-700 transition-colors border border-stone-200/40">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-3 md:p-4">
+        <div class="admin-card">
+            <div class="flex-between mb-3">
+                <div>
+                    <h3 class="text-base font-bold">User Feedback</h3>
+                    <span id="feedback-count" class="text-xs text-stone-500"></span>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="exportFeedback()" class="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-lg text-xs">Export CSV</button>
+                    <button onclick="markAllReviewed()" class="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs">Mark All Reviewed</button>
+                </div>
+            </div>
+
+            <div class="filter-bar mb-4 p-3 bg-stone-50 rounded-xl border border-stone-200">
+                <span class="filter-label">🔍 Filter:</span>
+                <input type="date" id="filter-date-from" class="text-xs" placeholder="From">
+                <span class="text-stone-300">—</span>
+                <input type="date" id="filter-date-to" class="text-xs" placeholder="To">
+                <select id="filter-status" class="text-xs">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="reviewed">Reviewed</option>
+                    <option value="followup">Followed Up</option>
+                </select>
+                <select id="filter-type" class="text-xs">
+                    <option value="">All Types</option>
+                    <option value="scanning">Scanning Issue</option>
+                    <option value="bug">Bug Report</option>
+                    <option value="suggestion">Suggestion</option>
+                    <option value="general">General Feedback</option>
+                    <option value="other">Other</option>
+                </select>
+                <button onclick="applyFilters()" class="bg-rose-100 text-rose-700 px-3 py-1 rounded-lg text-xs font-bold hover:bg-rose-200 transition-colors">Apply</button>
+                <button onclick="clearFilters()" class="bg-stone-200 text-stone-600 px-3 py-1 rounded-lg text-xs hover:bg-stone-300 transition-colors">Clear</button>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>Date</th>
+                        <th>User Name</th>
+                        <th>Phone</th>
+                        <th>Food</th>
+                        <th>Type</th>
+                        <th>Rating</th>
+                        <th>Status</th>
+                    </tr></thead>
+                    <tbody id="feedback-table-body"></tbody>
+                </table>
+            </div>
+            <div id="feedback-empty" class="empty-state">No feedback submitted yet.</div>
+        </div>
+    </main>
+
+    <!-- ─── DETAIL MODAL ────────────────────────────────────────────────── -->
+    <div id="detail-modal" class="modal-overlay" onclick="if(event.target===this) closeDetailModal()">
+        <div class="modal-content relative">
+            <button class="modal-close-btn" onclick="closeDetailModal()">✕</button>
+            <h3 class="text-xl font-bold text-stone-900 mb-4">📝 Feedback Details</h3>
+            <div id="detail-content">
+                <div class="detail-row"><span class="detail-label">Date</span><div class="detail-value" id="detail-date">—</div></div>
+                <div class="detail-row"><span class="detail-label">User Name</span><div class="detail-value" id="detail-user">—</div></div>
+                <div class="detail-row"><span class="detail-label">Phone</span><div class="detail-value" id="detail-phone">—</div></div>
+                <div class="detail-row"><span class="detail-label">Food</span><div class="detail-value" id="detail-food">—</div></div>
+                <div class="detail-row"><span class="detail-label">Type</span><div class="detail-value" id="detail-type">—</div></div>
+                <div class="detail-row"><span class="detail-label">Reason / Comments</span><div class="detail-value" id="detail-reason">—</div></div>
+                <div class="detail-row"><span class="detail-label">Rating</span><div class="detail-value" id="detail-rating">—</div></div>
+                <div class="detail-row"><span class="detail-label">Status</span><div class="detail-value" id="detail-status">—</div></div>
+            </div>
+            <div class="flex gap-3 mt-6 pt-4 border-t border-stone-200">
+                <button id="detail-mark-reviewed" class="flex-1 bg-emerald-100 text-emerald-700 py-2 rounded-xl text-sm font-bold hover:bg-emerald-200 transition-colors">✅ Mark Reviewed</button>
+                <button id="detail-mark-followup" class="flex-1 bg-blue-100 text-blue-700 py-2 rounded-xl text-sm font-bold hover:bg-blue-200 transition-colors">🔄 Follow Up</button>
+                <button id="detail-delete" class="flex-1 bg-red-100 text-red-700 py-2 rounded-xl text-sm font-bold hover:bg-red-200 transition-colors">🗑️ Delete</button>
+            </div>
+            <p id="detail-id" class="hidden"></p>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+    <script>
+        // ─── AUTH CHECK ────────────────────────────────────────────────
+        if (!checkAdminAuth()) { /* redirect already done */ }
+
+        // ─── HAMBURGER TOGGLE ──────────────────────────────────────────
+        function toggleNav() { document.getElementById('nav-links').classList.toggle('open'); }
+
+        // ─── STATE ──────────────────────────────────────────────────────
+        let currentFeedbackData = [];
+
+        // ─── NOTIFICATION BADGE ────────────────────────────────────────
+        async function updateNotificationBadge() {
+            try {
+                const snapshot = await db.collection('feedback').where('reviewed', '==', false).get();
+                const pending = snapshot.size;
+                const badge = document.getElementById('feedback-notification-badge');
+                if (pending > 0) {
+                    badge.classList.remove('hidden');
+                    badge.textContent = pending;
+                } else {
+                    badge.classList.add('hidden');
+                }
+            } catch (err) {
+                console.error('Error updating badge:', err);
+            }
+        }
+
+        // ─── RENDER FEEDBACK ──────────────────────────────────────────
+        async function renderFeedback() {
+            const tbody = document.getElementById('feedback-table-body');
+            const empty = document.getElementById('feedback-empty');
+            const count = document.getElementById('feedback-count');
+
+            try {
+                const snapshot = await db.collection('feedback')
+                    .orderBy('timestamp', 'desc')
+                    .get();
+
+                const allFeedback = [];
+                snapshot.forEach(doc => {
+                    allFeedback.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Filter out unknown entries
+                const cleaned = allFeedback.filter(fb => {
+                    const name = fb.userName || '';
+                    const phone = fb.userPhone || '';
+                    return name.trim() !== '' && name !== 'Unknown' && phone.trim() !== '';
+                });
+
+                const dateFrom = document.getElementById('filter-date-from').value;
+                const dateTo = document.getElementById('filter-date-to').value;
+                const statusFilter = document.getElementById('filter-status').value;
+                const typeFilter = document.getElementById('filter-type').value;
+
+                let filtered = cleaned;
+
+                if (dateFrom) {
+                    const from = new Date(dateFrom);
+                    filtered = filtered.filter(f => f.timestamp && f.timestamp.toDate() >= from);
+                }
+                if (dateTo) {
+                    const to = new Date(dateTo);
+                    to.setHours(23, 59, 59);
+                    filtered = filtered.filter(f => f.timestamp && f.timestamp.toDate() <= to);
+                }
+                if (statusFilter) {
+                    if (statusFilter === 'pending') filtered = filtered.filter(f => !f.reviewed);
+                    else if (statusFilter === 'reviewed') filtered = filtered.filter(f => f.reviewed === true && !f.followedUp);
+                    else if (statusFilter === 'followup') filtered = filtered.filter(f => f.followedUp === true);
+                }
+                if (typeFilter) {
+                    filtered = filtered.filter(f => (f.type || 'general') === typeFilter);
+                }
+
+                currentFeedbackData = filtered;
+                count.textContent = `${filtered.length} total (${allFeedback.length} overall, ${allFeedback.length - cleaned.length} hidden as unknown)`;
+
+                if (filtered.length === 0) {
+                    tbody.innerHTML = '';
+                    empty.style.display = 'block';
+                    return;
+                }
+                empty.style.display = 'none';
+
+                tbody.innerHTML = filtered.map((fb, idx) => {
+                    const status = fb.reviewed ? (fb.followedUp ? '🔄 Followed Up' : '✅ Reviewed') : '🟡 Pending';
+                    const statusClass = fb.reviewed ? (fb.followedUp ? 'badge-followup' : 'badge-reviewed') : 'badge-pending';
+                    const userName = fb.userName || 'Unknown';
+                    const userPhone = fb.userPhone || '-';
+                    const displayPhone = (userPhone && userPhone !== 'GUEST_USER') ? userPhone : '-';
+                    const foodName = fb.foodName || '-';
+                    const type = fb.type || 'general';
+                    const typeLabels = { 'scanning': '🔍', 'bug': '🐛', 'suggestion': '💡', 'general': '📝', 'other': '📌' };
+                    const typeLabel = typeLabels[type] || '📝';
+
+                    return `<tr class="feedback-row" onclick="openDetailModal(${idx})">
+                        <td class="text-xs whitespace-nowrap">${fb.timestamp ? fb.timestamp.toDate().toLocaleDateString() : 'N/A'}</td>
+                        <td class="text-xs">${userName}</td>
+                        <td class="text-xs">${displayPhone}</td>
+                        <td class="text-xs">${foodName}</td>
+                        <td class="text-xs">${typeLabel}</td>
+                        <td>${'⭐'.repeat(fb.rating || 0)}</td>
+                        <td><span class="badge ${statusClass}">${status}</span></td>
+                    </tr>`;
+                }).join('');
+
+                updateNotificationBadge();
+
+            } catch (err) {
+                console.error('Error loading feedback:', err);
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-red-500">Error loading feedback.</td></tr>';
+            }
+        }
+
+        // ─── OPEN DETAIL MODAL ────────────────────────────────────────
+        function openDetailModal(index) {
+            const fb = currentFeedbackData[index];
+            if (!fb) return;
+
+            document.getElementById('detail-date').textContent = fb.timestamp ? fb.timestamp.toDate().toLocaleString() : 'N/A';
+            document.getElementById('detail-user').textContent = fb.userName || 'Unknown';
+            document.getElementById('detail-phone').textContent = (fb.userPhone && fb.userPhone !== 'GUEST_USER') ? fb.userPhone : '-';
+            document.getElementById('detail-food').textContent = fb.foodName || '-';
+            
+            const typeLabels = { 'scanning': '🔍 Scanning Issue', 'bug': '🐛 Bug Report', 'suggestion': '💡 Suggestion', 'general': '📝 General Feedback', 'other': '📌 Other' };
+            document.getElementById('detail-type').textContent = typeLabels[fb.type] || 'General Feedback';
+            
+            document.getElementById('detail-reason').textContent = fb.reason || '-';
+            document.getElementById('detail-rating').textContent = '⭐'.repeat(fb.rating || 0) + ` (${fb.rating || 0}/4)`;
+            
+            const statusText = fb.reviewed ? (fb.followedUp ? '🔄 Followed Up' : '✅ Reviewed') : '🟡 Pending';
+            document.getElementById('detail-status').textContent = statusText;
+            document.getElementById('detail-id').textContent = index;
+
+            // Update button states
+            const markReviewedBtn = document.getElementById('detail-mark-reviewed');
+            const markFollowupBtn = document.getElementById('detail-mark-followup');
+            
+            if (fb.reviewed) {
+                markReviewedBtn.textContent = '✅ Already Reviewed';
+                markReviewedBtn.className = 'flex-1 bg-stone-100 text-stone-500 py-2 rounded-xl text-sm font-bold cursor-not-allowed';
+                markReviewedBtn.disabled = true;
+            } else {
+                markReviewedBtn.textContent = '✅ Mark Reviewed';
+                markReviewedBtn.className = 'flex-1 bg-emerald-100 text-emerald-700 py-2 rounded-xl text-sm font-bold hover:bg-emerald-200 transition-colors';
+                markReviewedBtn.disabled = false;
+            }
+
+            if (fb.followedUp) {
+                markFollowupBtn.textContent = '🔄 Already Followed Up';
+                markFollowupBtn.className = 'flex-1 bg-stone-100 text-stone-500 py-2 rounded-xl text-sm font-bold cursor-not-allowed';
+                markFollowupBtn.disabled = true;
+            } else {
+                markFollowupBtn.textContent = '🔄 Follow Up';
+                markFollowupBtn.className = 'flex-1 bg-blue-100 text-blue-700 py-2 rounded-xl text-sm font-bold hover:bg-blue-200 transition-colors';
+                markFollowupBtn.disabled = false;
+            }
+
+            document.getElementById('detail-modal').classList.add('active');
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detail-modal').classList.remove('active');
+        }
+
+        // ─── GET CURRENT FEEDBACK INDEX ─────────────────────────────
+        function getCurrentFeedbackIndex() {
+            const idx = parseInt(document.getElementById('detail-id').textContent);
+            if (isNaN(idx) || idx < 0 || idx >= currentFeedbackData.length) return -1;
+            return idx;
+        }
+
+        // ─── BUTTON FUNCTIONS (Firebase) ─────────────────────────────
+        async function markReviewed() {
+            const idx = getCurrentFeedbackIndex();
+            if (idx === -1) return;
+            const docId = currentFeedbackData[idx].id;
+            try {
+                await db.collection('feedback').doc(docId).update({
+                    reviewed: true,
+                    followedUp: false
+                });
+                renderFeedback();
+                updateNotificationBadge();
+                closeDetailModal();
+            } catch (err) {
+                alert('Update failed: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        async function markFollowedUp() {
+            const idx = getCurrentFeedbackIndex();
+            if (idx === -1) return;
+            const docId = currentFeedbackData[idx].id;
+            try {
+                await db.collection('feedback').doc(docId).update({
+                    reviewed: true,
+                    followedUp: true
+                });
+                renderFeedback();
+                updateNotificationBadge();
+                closeDetailModal();
+            } catch (err) {
+                alert('Update failed: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        async function deleteFeedbackFromModal() {
+            if (!confirm('Delete this feedback entry?')) return;
+            const idx = getCurrentFeedbackIndex();
+            if (idx === -1) return;
+            const docId = currentFeedbackData[idx].id;
+            try {
+                await db.collection('feedback').doc(docId).delete();
+                renderFeedback();
+                updateNotificationBadge();
+                closeDetailModal();
+            } catch (err) {
+                alert('Delete failed: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        // ─── MARK ALL REVIEWED ──────────────────────────────────────────
+        async function markAllReviewed() {
+            if (!confirm('Mark all pending feedback as reviewed?')) return;
+            try {
+                const snapshot = await db.collection('feedback').where('reviewed', '==', false).get();
+                const batch = db.batch();
+                snapshot.forEach(doc => {
+                    batch.update(doc.ref, { reviewed: true, followedUp: false });
+                });
+                await batch.commit();
+                renderFeedback();
+                updateNotificationBadge();
+            } catch (err) {
+                alert('Update failed: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        // ─── EXPORT CSV ────────────────────────────────────────────
+        function exportFeedback() {
+            if (currentFeedbackData.length === 0) {
+                alert('No feedback matches the current filters. Export cancelled.');
+                return;
+            }
+
+            const headers = ['Date', 'User Name', 'Phone', 'Food (App ID)', 'Type', 'Reason', 'Rating', 'Status'];
+            const rows = currentFeedbackData.map(fb => {
+                const userName = fb.userName || 'Unknown';
+                const userPhone = fb.userPhone || '-';
+                const typeLabels = { 'scanning': 'Scanning Issue', 'bug': 'Bug Report', 'suggestion': 'Suggestion', 'general': 'General Feedback', 'other': 'Other' };
+                const statusText = fb.reviewed ? (fb.followedUp ? 'Followed Up' : 'Reviewed') : 'Pending';
+                return [
+                    fb.timestamp ? fb.timestamp.toDate().toLocaleDateString() : 'N/A',
+                    userName,
+                    (userPhone && userPhone !== 'GUEST_USER') ? userPhone : '-',
+                    fb.foodName || '-',
+                    typeLabels[fb.type] || 'General',
+                    (fb.reason || '-').replace(/,/g, ';'),
+                    fb.rating || 0,
+                    statusText
+                ];
+            });
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'chokesafe_feedback_filtered.csv';
+            link.click();
+        }
+
+        // ─── FILTERS ──────────────────────────────────────────────────
+        function applyFilters() {
+            renderFeedback();
+        }
+
+        function clearFilters() {
+            document.getElementById('filter-date-from').value = '';
+            document.getElementById('filter-date-to').value = '';
+            document.getElementById('filter-status').value = '';
+            document.getElementById('filter-type').value = '';
+            renderFeedback();
+        }
+
+        // ─── INIT ──────────────────────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', function() {
+            renderFeedback();
+            updateNotificationBadge();
+
+            // ─── BIND MODAL BUTTONS ────────────────────────────────────
+            document.getElementById('detail-mark-reviewed').addEventListener('click', markReviewed);
+            document.getElementById('detail-mark-followup').addEventListener('click', markFollowedUp);
+            document.getElementById('detail-delete').addEventListener('click', deleteFeedbackFromModal);
+        });
+
+        // ─── EXPOSE FUNCTIONS ──────────────────────────────────────────
+        window.toggleNav = toggleNav;
+        window.renderFeedback = renderFeedback;
+        window.applyFilters = applyFilters;
+        window.clearFilters = clearFilters;
+        window.exportFeedback = exportFeedback;
+        window.markAllReviewed = markAllReviewed;
+        window.openDetailModal = openDetailModal;
+        window.closeDetailModal = closeDetailModal;
+        window.markReviewed = markReviewed;
+        window.markFollowedUp = markFollowedUp;
+        window.deleteFeedbackFromModal = deleteFeedbackFromModal;
+        window.updateNotificationBadge = updateNotificationBadge;
+    </script>
+</body>
+</html>

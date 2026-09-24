@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Admin | Scan Logs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+    <style>
+        body { background: #f1f5f9; }
+        .admin-card { background: white; border-radius: 16px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e9edf2; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th { text-align: left; padding: 0.5rem 0.4rem; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #1e293b; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; }
+        td { padding: 0.4rem 0.4rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; font-size: 0.8rem; }
+        .badge { padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.65rem; font-weight: 600; }
+        .badge-high { background: #fee2e2; color: #991b1b; }
+        .badge-medium { background: #fef3c7; color: #92400e; }
+        .badge-safe { background: #d1fae5; color: #065f46; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+        .empty-state { text-align: center; padding: 1.5rem 1rem; color: #94a3b8; font-size: 0.9rem; }
+
+        .nav-links { display: flex; gap: 1rem; align-items: center; }
+        .hamburger { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #1e293b; padding: 0.25rem 0.5rem; }
+        .nav-link-custom { position: relative; transition: all 0.2s ease; }
+        .nav-link-custom::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 2px; background: #e11d48; transition: width 0.3s ease; }
+        .nav-link-custom:hover::after { width: 100%; }
+        .nav-link-custom.active::after { width: 100%; }
+        @media (max-width: 640px) {
+            .nav-links { display: none; flex-direction: column; gap: 0.5rem; padding: 0.75rem 0; width: 100%; align-items: flex-start; }
+            .nav-links.open { display: flex; }
+            .hamburger { display: block; }
+            .nav-container { flex-wrap: wrap; }
+            .nav-links button { font-size: 0.9rem !important; padding: 0.4rem 0 !important; }
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            padding: 20px;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            max-width: 600px;
+            width: 100%;
+            padding: 2rem;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.9) translateY(20px);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.active .modal-content {
+            transform: scale(1) translateY(0);
+        }
+        .modal-close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: #f1f5f9;
+            border: none;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #475569;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .modal-close-btn:hover { background: #e2e8f0; color: #1e293b; }
+        .modal-content { position: relative; }
+        .detail-label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; }
+        .detail-value { font-size: 0.9rem; color: #1e293b; word-wrap: break-word; }
+        .detail-row { padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9; }
+
+        .log-row { cursor: pointer; transition: background 0.15s; }
+        .log-row:hover { background: #f1f5f9; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-stone-50 via-white to-stone-100 min-h-screen font-sans antialiased">
+
+    <nav class="bg-white/90 backdrop-blur-md border-b border-rose-100/60 p-3 md:p-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-6xl mx-auto flex justify-between items-center nav-container">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🛡️</span>
+                <h1 class="font-black text-xl md:text-2xl text-rose-700 tracking-tight">ChokeSafe · Admin</h1>
+            </div>
+            <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+            <div class="nav-links" id="nav-links">
+                <button onclick="window.location.href='dashboard.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Dashboard</button>
+                <button onclick="window.location.href='feedback.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Feedback</button>
+                <button onclick="window.location.href='logs.html'" class="nav-link-custom text-rose-600 font-medium text-xs md:text-sm active">Scan Logs</button>
+                <button onclick="window.location.href='fooddb.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Food DB</button>
+                <button onclick="window.location.href='settings.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Settings</button>
+                <button onclick="logout()" class="bg-stone-100/70 text-stone-600 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[10px] md:text-xs font-bold hover:bg-rose-100 hover:text-rose-700 transition-colors border border-stone-200/40">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-3 md:p-4">
+        <div class="admin-card">
+            <div class="flex-between mb-3">
+                <h3 class="text-base font-bold">Scan History</h3>
+                <div class="flex gap-1.5 text-xs flex-wrap">
+                    <input type="date" id="log-filter-date" class="border rounded-lg px-2 py-1 text-xs">
+                    <select id="log-filter-risk" class="border rounded-lg px-2 py-1 text-xs">
+                        <option value="">All Risks</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Safe">Safe</option>
+                    </select>
+                    <button onclick="renderLogs()" class="bg-stone-200 px-3 py-1 rounded-lg text-xs">Filter</button>
+                    <button onclick="exportLogs()" class="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-lg text-xs">Export CSV</button>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>Timestamp</th>
+                        <th>User Name</th>
+                        <th>Phone Number</th>
+                        <th>Food</th>
+                        <th>Risk</th>
+                        <th>Reason</th>
+                    </tr></thead>
+                    <tbody id="logs-table-body"></tbody>
+                </table>
+            </div>
+            <div id="logs-empty" class="empty-state">No scan logs found.</div>
+        </div>
+    </main>
+
+    <!-- ─── DETAIL MODAL ────────────────────────────────────────────────── -->
+    <div id="detail-modal" class="modal-overlay" onclick="if(event.target===this) closeDetailModal()">
+        <div class="modal-content relative">
+            <button class="modal-close-btn" onclick="closeDetailModal()">✕</button>
+            <h3 class="text-xl font-bold text-stone-900 mb-4">📋 Scan Details</h3>
+            <div id="detail-content">
+                <div class="detail-row"><span class="detail-label">Timestamp</span><div class="detail-value" id="detail-timestamp">—</div></div>
+                <div class="detail-row"><span class="detail-label">User Name</span><div class="detail-value" id="detail-user">—</div></div>
+                <div class="detail-row"><span class="detail-label">Phone Number</span><div class="detail-value" id="detail-phone">—</div></div>
+                <div class="detail-row"><span class="detail-label">Food</span><div class="detail-value" id="detail-food">—</div></div>
+                <div class="detail-row"><span class="detail-label">Risk Level</span><div class="detail-value" id="detail-risk">—</div></div>
+                <div class="detail-row"><span class="detail-label">Reason</span><div class="detail-value" id="detail-reason">—</div></div>
+                <div class="detail-row"><span class="detail-label">Advice</span><div class="detail-value" id="detail-advice">—</div></div>
+            </div>
+            <div class="flex gap-3 mt-6 pt-4 border-t border-stone-200">
+                <button id="detail-delete" class="flex-1 bg-red-100 text-red-700 py-2 rounded-xl text-sm font-bold hover:bg-red-200 transition-colors">🗑️ Delete</button>
+            </div>
+            <p id="detail-index" class="hidden"></p>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+    <script>
+        if (!checkAdminAuth()) { /* redirect already done */ }
+
+        function toggleNav() { document.getElementById('nav-links').classList.toggle('open'); }
+
+        // ─── HELPER: Check if food is valid ──────────────────────────────
+        function isValidFood(foodName) {
+            if (!foodName) return false;
+            const lower = foodName.toLowerCase().trim();
+            return lower !== 'unknown' && lower !== '' && lower !== 'undefined' && lower !== 'null';
+        }
+
+        // ─── STATE ──────────────────────────────────────────────────────
+        let currentLogsData = [];
+
+        // ─── RENDER LOGS (Firebase) ────────────────────────────────────
+        async function renderLogs() {
+            const tbody = document.getElementById('logs-table-body');
+            const empty = document.getElementById('logs-empty');
+
+            if (!tbody) {
+                console.error('tbody element not found');
+                return;
+            }
+
+            const dateFilter = document.getElementById('log-filter-date').value.trim();
+            const riskFilter = document.getElementById('log-filter-risk').value;
+
+            try {
+                const snapshot = await db.collection('scans')
+                    .orderBy('timestamp', 'desc')
+                    .get();
+
+                let logs = [];
+                snapshot.forEach(doc => {
+                    logs.push({ id: doc.id, ...doc.data() });
+                });
+
+                // ─── FILTER OUT UNKNOWN FOODS ────────────────────────────────
+                logs = logs.filter(log => isValidFood(log.foodName));
+
+                // Apply date filter
+                if (dateFilter) {
+                    const filterDate = new Date(dateFilter);
+                    logs = logs.filter(log => {
+                        if (!log.timestamp) return false;
+                        const logDate = log.timestamp.toDate();
+                        return logDate.toDateString() === filterDate.toDateString();
+                    });
+                }
+                if (riskFilter) {
+                    logs = logs.filter(log => log.riskLevel === riskFilter);
+                }
+
+                currentLogsData = logs;
+
+                if (logs.length === 0) {
+                    tbody.innerHTML = '';
+                    if (empty) empty.style.display = 'block';
+                    return;
+                }
+                if (empty) empty.style.display = 'none';
+
+                // Build rows with async user name lookup
+                const rows = await Promise.all(logs.map(async (log, index) => {
+                    const userName = await getUserName(log.phone);
+                    const displayPhone = (log.phone && log.phone !== 'GUEST_USER') ? log.phone : '-';
+                    const riskClass = log.riskLevel === 'High' ? 'badge-high' :
+                                     log.riskLevel === 'Medium' ? 'badge-medium' : 'badge-safe';
+                    const dateStr = log.timestamp ? log.timestamp.toDate().toLocaleString() : '-';
+
+                    return `<tr class="log-row" onclick="openDetailModal(${index})">
+                        <td class="text-xs whitespace-nowrap">${dateStr}</td>
+                        <td class="text-xs">${userName}</td>
+                        <td class="text-xs">${displayPhone}</td>
+                        <td class="text-xs font-medium">${log.foodName || 'Unknown'}</td>
+                        <td><span class="badge ${riskClass}">${log.riskLevel}</span></td>
+                        <td class="text-xs text-stone-500 truncate max-w-[150px]">${log.reason || ''}</td>
+                    </tr>`;
+                }));
+
+                tbody.innerHTML = rows.join('');
+
+            } catch (err) {
+                console.error('Error loading logs:', err);
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-red-500">Error loading logs.</td></tr>';
+            }
+        }
+
+        // ─── OPEN DETAIL MODAL ────────────────────────────────────────
+        function openDetailModal(index) {
+            const log = currentLogsData[index];
+            if (!log) return;
+
+            document.getElementById('detail-timestamp').textContent = log.timestamp ? log.timestamp.toDate().toLocaleString() : '-';
+            document.getElementById('detail-user').textContent = log.userName || 'Unknown';
+            document.getElementById('detail-phone').textContent = (log.phone && log.phone !== 'GUEST_USER') ? log.phone : '-';
+            document.getElementById('detail-food').textContent = log.foodName || 'Unknown';
+            document.getElementById('detail-risk').textContent = log.riskLevel || '-';
+            document.getElementById('detail-reason').textContent = log.reason || '-';
+            document.getElementById('detail-advice').textContent = log.advice || '-';
+            document.getElementById('detail-index').textContent = index;
+
+            document.getElementById('detail-modal').classList.add('active');
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detail-modal').classList.remove('active');
+        }
+
+        // ─── DELETE LOG (Firebase) ──────────────────────────────────────
+        async function deleteLog() {
+            const idx = parseInt(document.getElementById('detail-index').textContent);
+            if (isNaN(idx) || idx < 0 || idx >= currentLogsData.length) return;
+            if (!confirm('Delete this scan log entry?')) return;
+
+            const docId = currentLogsData[idx].id;
+            try {
+                await db.collection('scans').doc(docId).delete();
+                renderLogs();
+                closeDetailModal();
+            } catch (err) {
+                alert('Delete failed: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        // ─── EXPORT LOGS (with valid foods only) ──────────────────────
+        async function exportLogs() {
+            try {
+                const snapshot = await db.collection('scans').get();
+                const allScans = [];
+                snapshot.forEach(doc => allScans.push(doc.data()));
+
+                const scans = allScans.filter(s => isValidFood(s.foodName));
+
+                if (scans.length === 0) {
+                    alert('No valid logs to export.');
+                    return;
+                }
+
+                const headers = ['Timestamp', 'User Name', 'Phone', 'Food', 'Risk', 'Reason', 'Advice'];
+                const rows = await Promise.all(scans.map(async s => {
+                    const userName = await getUserName(s.phone);
+                    const displayPhone = (s.phone && s.phone !== 'GUEST_USER') ? s.phone : '-';
+                    const dateStr = s.timestamp ? s.timestamp.toDate().toLocaleString() : '';
+                    return [
+                        dateStr,
+                        userName,
+                        displayPhone,
+                        s.foodName || '',
+                        s.riskLevel || '',
+                        (s.reason || '').replace(/,/g, ';'),
+                        (s.advice || '').replace(/,/g, ';')
+                    ];
+                }));
+
+                const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'chokesafe_logs.csv';
+                link.click();
+            } catch (err) {
+                alert('Export failed: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        // ─── INIT ──────────────────────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', function() {
+            renderLogs();
+            document.getElementById('detail-delete').addEventListener('click', deleteLog);
+        });
+
+        window.toggleNav = toggleNav;
+        window.renderLogs = renderLogs;
+        window.exportLogs = exportLogs;
+        window.openDetailModal = openDetailModal;
+        window.closeDetailModal = closeDetailModal;
+        window.deleteLog = deleteLog;
+    </script>
+</body>
+</html>

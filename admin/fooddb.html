@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Admin | Food Database</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDKs (compat) - only Firestore -->
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+    <style>
+        body { background: #f1f5f9; }
+        .admin-card { background: white; border-radius: 16px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e9edf2; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th { text-align: left; padding: 0.5rem 0.4rem; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #1e293b; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; }
+        td { padding: 0.4rem 0.4rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; font-size: 0.8rem; }
+        .badge { padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.65rem; font-weight: 600; }
+        .badge-high { background: #fee2e2; color: #991b1b; }
+        .badge-medium { background: #fef3c7; color: #92400e; }
+        .badge-safe { background: #d1fae5; color: #065f46; }
+        .btn-edit { color: #3b82f6; cursor: pointer; font-size: 0.75rem; }
+        .btn-edit:hover { text-decoration: underline; }
+        .btn-delete { color: #ef4444; cursor: pointer; font-size: 0.75rem; }
+        .btn-delete:hover { text-decoration: underline; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+        .empty-state { text-align: center; padding: 1.5rem 1rem; color: #94a3b8; font-size: 0.9rem; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 999; opacity: 0; visibility: hidden; transition: all 0.3s; }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
+        .modal-content { background: white; border-radius: 20px; max-width: 600px; width: 90%; padding: 1.5rem; max-height: 80vh; overflow-y: auto; }
+        .form-input { width: 100%; padding: 0.5rem 0.7rem; border: 1px solid #d1d5db; border-radius: 10px; font-size: 0.85rem; }
+        .form-input:focus { outline: none; border-color: #e11d48; box-shadow: 0 0 0 3px rgba(225,29,72,0.1); }
+        .btn-primary { background: #e11d48; color: white; padding: 0.4rem 1.2rem; border-radius: 9999px; font-weight: 600; border: none; cursor: pointer; transition: background 0.2s; font-size: 0.85rem; }
+        .btn-primary:hover { background: #be123c; }
+        .btn-secondary { background: #e2e8f0; color: #1e293b; padding: 0.4rem 1.2rem; border-radius: 9999px; font-weight: 600; border: none; cursor: pointer; transition: background 0.2s; font-size: 0.85rem; }
+        .btn-secondary:hover { background: #cbd5e1; }
+        .image-preview { max-width: 100px; max-height: 100px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 6px; }
+        .thumbnail { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0; }
+
+        .nav-links { display: flex; gap: 1rem; align-items: center; }
+        .hamburger { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #1e293b; padding: 0.25rem 0.5rem; }
+        .nav-link-custom { position: relative; transition: all 0.2s ease; }
+        .nav-link-custom::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 2px; background: #e11d48; transition: width 0.3s ease; }
+        .nav-link-custom:hover::after { width: 100%; }
+        .nav-link-custom.active::after { width: 100%; }
+        @media (max-width: 640px) {
+            .nav-links { display: none; flex-direction: column; gap: 0.5rem; padding: 0.75rem 0; width: 100%; align-items: flex-start; }
+            .nav-links.open { display: flex; }
+            .hamburger { display: block; }
+            .nav-container { flex-wrap: wrap; }
+            .nav-links button { font-size: 0.9rem !important; padding: 0.4rem 0 !important; }
+            .thumbnail { width: 30px; height: 30px; }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-stone-50 via-white to-stone-100 min-h-screen font-sans antialiased">
+
+    <nav class="bg-white/90 backdrop-blur-md border-b border-rose-100/60 p-3 md:p-4 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-6xl mx-auto flex justify-between items-center nav-container">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🛡️</span>
+                <h1 class="font-black text-xl md:text-2xl text-rose-700 tracking-tight">ChokeSafe · Admin</h1>
+            </div>
+            <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+            <div class="nav-links" id="nav-links">
+                <button onclick="window.location.href='dashboard.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Dashboard</button>
+                <button onclick="window.location.href='feedback.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Feedback</button>
+                <button onclick="window.location.href='logs.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Scan Logs</button>
+                <button onclick="window.location.href='fooddb.html'" class="nav-link-custom text-rose-600 font-medium text-xs md:text-sm active">Food DB</button>
+                <button onclick="window.location.href='settings.html'" class="nav-link-custom text-stone-600 hover:text-rose-600 font-medium text-xs md:text-sm">Settings</button>
+                <button onclick="logout()" class="bg-stone-100/70 text-stone-600 px-2 md:px-3 py-1 md:py-1.5 rounded-lg text-[10px] md:text-xs font-bold hover:bg-rose-100 hover:text-rose-700 transition-colors border border-stone-200/40">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-3 md:p-4">
+        <div class="admin-card">
+            <div class="flex-between mb-3">
+                <h3 class="text-base font-bold">Food Keyword – Risk Mappings</h3>
+                <button onclick="openAddFoodModal()" class="btn-primary text-xs py-1.5 px-4">+ Add Food</button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>Image</th>
+                        <th>Keywords</th>
+                        <th>Risk</th>
+                        <th>Reason</th>
+                        <th>Actions</th>
+                    </tr></thead>
+                    <tbody id="fooddb-table-body"></tbody>
+                </table>
+            </div>
+            <div id="fooddb-empty" class="empty-state">No foods in database. Add some!</div>
+        </div>
+    </main>
+
+    <!-- Add/Edit Food Modal -->
+    <div id="food-modal" class="modal-overlay" onclick="if(event.target===this) closeFoodModal()">
+        <div class="modal-content">
+            <h3 id="food-modal-title" class="text-xl font-bold mb-3">Add Food</h3>
+            <input type="hidden" id="food-edit-index" value="-1">
+            <div class="space-y-2.5">
+                <!-- Image upload -->
+                <div>
+                    <label class="block text-sm font-medium text-stone-600">Image</label>
+                    <input type="file" id="food-image" accept="image/*" class="form-input" onchange="previewImage(event)">
+                    <div id="image-preview-container" class="hidden mt-1">
+                        <img id="image-preview" class="image-preview" src="" alt="Preview">
+                    </div>
+                    <p class="text-xs text-stone-400 mt-1">Images will be compressed to 200px (max) to fit Firestore limits.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-stone-600">Keywords (comma separated)</label>
+                    <input type="text" id="food-keywords" class="form-input" placeholder="e.g., fishball, meatball, grape">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-stone-600">Risk Level</label>
+                    <select id="food-risk" class="form-input">
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Safe">Safe</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-stone-600">Reason</label>
+                    <input type="text" id="food-reason" class="form-input" placeholder="Explanation of risk">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-stone-600">Advice</label>
+                    <input type="text" id="food-advice" class="form-input" placeholder="Preparation guidance">
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button onclick="saveFood()" class="btn-primary">Save</button>
+                    <button onclick="closeFoodModal()" class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+    <script>
+        // ─── FIREBASE CONFIG ──────────────────────────────────────────────
+        // 🔽 PASTE YOUR FIREBASE CONFIG HERE 🔽
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+
+        // ─── AUTH CHECK ──────────────────────────────────────────────────
+        if (!checkAdminAuth()) { /* redirect already done */ }
+
+        function toggleNav() { document.getElementById('nav-links').classList.toggle('open'); }
+
+        // ─── RENDER TABLE ──────────────────────────────────────────────
+        let currentFoods = [];
+
+        function renderFoodTable(foods) {
+            const tbody = document.getElementById('fooddb-table-body');
+            const empty = document.getElementById('fooddb-empty');
+            if (!foods || foods.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+            empty.style.display = 'none';
+            currentFoods = foods;
+            tbody.innerHTML = foods.map((entry, idx) => `
+                <tr>
+                    <td>${entry.image ? `<img src="${entry.image}" class="thumbnail" alt="food">` : '-'}</td>
+                    <td class="text-xs">${entry.keywords || ''}</td>
+                    <td><span class="badge ${entry.risk === 'High' ? 'badge-high' : entry.risk === 'Medium' ? 'badge-medium' : 'badge-safe'}">${entry.risk}</span></td>
+                    <td class="text-xs">${entry.reason || ''}</td>
+                    <td>
+                        <span class="btn-edit" onclick="editFood(${idx})">Edit</span>
+                        <span class="btn-delete ml-2" onclick="deleteFood(${idx})">Delete</span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // ─── REAL-TIME LISTENER ──────────────────────────────────────────
+        let unsubscribe = null;
+
+        function subscribeToFoods() {
+    if (unsubscribe) unsubscribe();
+    // Use a simpler query without sorting – sort in JavaScript instead
+    unsubscribe = db.collection('foods')
+        .onSnapshot(snapshot => {
+            const foods = [];
+            snapshot.forEach(doc => {
+                foods.push({ id: doc.id, ...doc.data() });
+            });
+            // Sort by createdAt (if it exists), fallback to doc ID
+            foods.sort((a, b) => {
+                const dateA = a.createdAt ? a.createdAt.toDate() : new Date(0);
+                const dateB = b.createdAt ? b.createdAt.toDate() : new Date(0);
+                return dateB - dateA;
+            });
+            renderFoodTable(foods);
+        }, error => {
+            console.error('Firestore error:', error);
+            alert('Error loading foods from Firebase. Check console.');
+        });
+}
+        // ─── IMAGE PREVIEW ──────────────────────────────────────────────
+        function previewImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('image-preview').src = e.target.result;
+                    document.getElementById('image-preview-container').classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                document.getElementById('image-preview-container').classList.add('hidden');
+            }
+        }
+
+        // ─── IMAGE COMPRESSION ──────────────────────────────────────────
+        function compressImage(file, maxWidth = 200, maxHeight = 200, quality = 0.6) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        let width = img.width;
+                        let height = img.height;
+                        // Scale down if needed
+                        if (width > maxWidth || height > maxHeight) {
+                            const ratio = Math.min(maxWidth / width, maxHeight / height);
+                            width = Math.round(width * ratio);
+                            height = Math.round(height * ratio);
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        // Convert to JPEG with quality (smaller file)
+                        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                        resolve(dataUrl);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // ─── OPEN ADD MODAL ────────────────────────────────────────────
+        function openAddFoodModal() {
+            document.getElementById('food-modal-title').textContent = 'Add Food';
+            document.getElementById('food-edit-index').value = '-1';
+            document.getElementById('food-keywords').value = '';
+            document.getElementById('food-risk').value = 'Medium';
+            document.getElementById('food-reason').value = '';
+            document.getElementById('food-advice').value = '';
+            document.getElementById('food-image').value = '';
+            document.getElementById('image-preview-container').classList.add('hidden');
+            document.getElementById('food-modal').classList.add('active');
+        }
+
+        // ─── EDIT MODAL ─────────────────────────────────────────────────
+        function editFood(index) {
+            const entry = currentFoods[index];
+            if (!entry) return;
+            document.getElementById('food-modal-title').textContent = 'Edit Food';
+            document.getElementById('food-edit-index').value = index;
+            document.getElementById('food-keywords').value = entry.keywords || '';
+            document.getElementById('food-risk').value = entry.risk || 'Medium';
+            document.getElementById('food-reason').value = entry.reason || '';
+            document.getElementById('food-advice').value = entry.advice || '';
+            if (entry.image) {
+                document.getElementById('image-preview').src = entry.image;
+                document.getElementById('image-preview-container').classList.remove('hidden');
+            } else {
+                document.getElementById('image-preview-container').classList.add('hidden');
+            }
+            document.getElementById('food-image').value = '';
+            document.getElementById('food-modal').classList.add('active');
+        }
+
+        function closeFoodModal() { document.getElementById('food-modal').classList.remove('active'); }
+
+        // ─── SAVE (with compression) ──────────────────────────────────
+        async function saveFood() {
+            const index = parseInt(document.getElementById('food-edit-index').value);
+            const keywords = document.getElementById('food-keywords').value.trim();
+            const risk = document.getElementById('food-risk').value;
+            const reason = document.getElementById('food-reason').value.trim();
+            const advice = document.getElementById('food-advice').value.trim();
+            if (!keywords) { alert('Please enter at least one keyword.'); return; }
+
+            let imageData = '';
+            const fileInput = document.getElementById('food-image');
+            if (fileInput.files && fileInput.files[0]) {
+                try {
+                    // Compress the image
+                    imageData = await compressImage(fileInput.files[0], 200, 200, 0.6);
+                } catch (err) {
+                    alert('Image compression failed: ' + err.message);
+                    return;
+                }
+            } else if (index !== -1) {
+                // Keep existing image
+                imageData = currentFoods[index].image || '';
+            }
+
+            const entry = { keywords, risk, reason, advice, image: imageData };
+
+            try {
+                if (index === -1) {
+                    entry.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                    await db.collection('foods').add(entry);
+                } else {
+                    const docId = currentFoods[index].id;
+                    await db.collection('foods').doc(docId).update(entry);
+                }
+                closeFoodModal();
+            } catch (err) {
+                alert('Save failed: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        // ─── DELETE ──────────────────────────────────────────────────────
+        async function deleteFood(index) {
+            if (!confirm('Delete this food entry?')) return;
+            const docId = currentFoods[index].id;
+            try {
+                await db.collection('foods').doc(docId).delete();
+            } catch (err) {
+                alert('Delete failed: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        // ─── SEED SAMPLE ENTRY ──────────────────────────────────────────
+        async function seedSampleIfEmpty() {
+            try {
+                const snapshot = await db.collection('foods').limit(1).get();
+                if (snapshot.empty) {
+                    const sampleImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23e8f5e9'/%3E%3Ctext x='5' y='28' font-size='26' fill='%23333'%3E🍉%3C/text%3E%3C/svg%3E";
+                    await db.collection('foods').add({
+                        keywords: 'watermelon, melon',
+                        risk: 'Safe',
+                        reason: 'Low choking risk, soft and juicy',
+                        advice: 'Cut into small bite-sized pieces, remove seeds',
+                        image: sampleImage,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    console.log('✅ Sample food added to Firestore');
+                }
+            } catch (err) {
+                console.warn('Could not seed sample:', err);
+            }
+        }
+
+        // ─── INIT ──────────────────────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', function() {
+            subscribeToFoods();
+            seedSampleIfEmpty();
+        });
+
+        window.toggleNav = toggleNav;
+        window.openAddFoodModal = openAddFoodModal;
+        window.editFood = editFood;
+        window.closeFoodModal = closeFoodModal;
+        window.saveFood = saveFood;
+        window.deleteFood = deleteFood;
+        window.previewImage = previewImage;
+    </script>
+</body>
+</html>
